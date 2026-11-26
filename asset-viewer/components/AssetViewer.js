@@ -69,7 +69,16 @@ function SidebarSection({title,open,onToggle,children,action,className=""}) {
   </section>;
 }
 
-export default function AssetViewer({ context = null, initialPdf = null, onScratchChange = null }) {
+function cleanExtracted(raw) {
+  const byLabel=new Map();
+  for(const item of Array.isArray(raw)?raw:[]){
+    if(!validPoint(item)||typeof item.label!=="string"||!item.label.trim())continue;
+    byLabel.set(item.label,{label:item.label,type:safeType(item.type),status:safeStatus(item.status),x:item.x,y:item.y});
+  }
+  return [...byLabel.values()];
+}
+
+export default function AssetViewer({ context = null, initialPdf = null, onScratchChange = null, sharedStore = null }) {
   const prefix = context ? `asset-viewer:${context.scope}:` : "asset-viewer:";
   const host = useRef(null);
   const lastBuffer = useRef(null);
@@ -82,8 +91,19 @@ export default function AssetViewer({ context = null, initialPdf = null, onScrat
   const [hash, setHash] = useState("");
   const [extracted, setExtracted] = useState([]);
   const [records, setRecords] = useState(blank);
+  const [savedVersion,setSavedVersion]=useState(sharedStore?.snapshot?.version||0);
+  const [baseline,setBaseline]=useState(null);
+  const [saving,setSaving]=useState(false);
+  const saveLock=useRef(false);
+  const [saveMessage,setSaveMessage]=useState("");
+  const [saveError,setSaveError]=useState("");
+  const [sidebarOpen,setSidebarOpen]=useState(true);
+  const [showMarkers,setShowMarkers]=useState(true);
+  const [settingsOpen,setSettingsOpen]=useState(false);
+  const [assetSearch,setAssetSearch]=useState("");
+  const canEdit=!context?.shared||!!sharedStore?.canEdit;
   const [selected, setSelected] = useState(null);
-  const [sections,setSections]=useState({suggestions:true,status:true,disciplines:true,assets:true,editor:true,classification:true,notes:true,links:false});
+  const [sections,setSections]=useState({suggestions:true,status:false,disciplines:false,assets:true,editor:true,classification:true,notes:false,links:false});
   const toggleSection=key=>setSections(old=>({...old,[key]:!old[key]}));
   const openSection=key=>setSections(old=>old[key]?old:{...old,[key]:true});
   const [mode, setMode] = useState("select");
@@ -104,16 +124,35 @@ export default function AssetViewer({ context = null, initialPdf = null, onScrat
   const [linkUrl, setLinkUrl] = useState("");
 
   const key = hash ? prefix + "v2:" + hash : "";
-  const hasScratchChanges=!!(Object.keys(records.manual).length||Object.keys(records.overrides).length);
+  const payload={records,extracted};
+  const serialized=JSON.stringify(payload);
+  const hasScratchChanges=sharedStore?baseline!==null&&serialized!==baseline:!!(Object.keys(records.manual).length||Object.keys(records.overrides).length);
+  async function saveShared(){
+    if(!sharedStore||!canEdit||!fileName||busy||dragRef.current||saveLock.current||baseline===null)return;
+    saveLock.current=true;setSaving(true);setSaveError("");setSaveMessage("");
+    try {
+      const table=sharedStore.db.from("drawing_calloff_sets");
+      const result=savedVersion
+        ?await table.update({payload,version:savedVersion+1}).eq("drawing_id",sharedStore.drawingId).eq("version",savedVersion).select("version,updated_at").maybeSingle()
+        :await table.insert({drawing_id:sharedStore.drawingId,payload}).select("version,updated_at").single();
+      if(result.error){
+        if(result.error.code==="23505")throw Error("Another engineer has saved this drawing. Your changes have not been written. Reopen the drawing to load the latest version.");
+        throw result.error;
+      }
+      if(!result.data)throw Error("The saved version changed or your edit access was revoked. Your changes have not been written. Reopen to load the latest version.");
+      setSavedVersion(result.data.version);setBaseline(serialized);setSaveMessage("Saved shared draft · v"+result.data.version);
+    }catch(e){setSaveError(e.message||"Could not save the call-offs.");}
+    finally{saveLock.current=false;setSaving(false);}
+  }
   useEffect(()=>{
-    if(context?.shared)onScratchChange?.(hasScratchChanges);
-  },[context?.shared,onScratchChange,hasScratchChanges]);
+    if(context?.shared)onScratchChange?.(hasScratchChanges||saving);
+  },[context?.shared,onScratchChange,hasScratchChanges,saving]);
   useEffect(()=>{
-    if(!context?.shared||!hasScratchChanges)return;
+    if(!context?.shared||(!hasScratchChanges&&!saving))return;
     const warn=e=>{e.preventDefault();e.returnValue="";};
     window.addEventListener("beforeunload",warn);
     return()=>window.removeEventListener("beforeunload",warn);
-  },[context?.shared,hasScratchChanges]);
+  },[context?.shared,hasScratchChanges,saving]);
   useEffect(() => {
     if (!key || context?.shared) return;
     try { localStorage.setItem(key, JSON.stringify(records)); setStorageError(""); }
@@ -155,9 +194,23 @@ export default function AssetViewer({ context = null, initialPdf = null, onScrat
           }
         } catch { setError("Previous browser records could not be read. Check your saved JSON backups."); }
       }
+      let candidates=cleanExtracted(res.assets);
+      if(sharedStore&&!reextracting){
+        if(sharedStore.snapshot){
+          const stored=sharedStore.snapshot.payload;
+          if(!stored||!Array.isArray(stored.extracted)||!stored.records)throw Error("Saved call-off data is invalid. Contact an administrator.");
+          saved=cleanRecords(stored.records);candidates=cleanExtracted(stored.extracted);
+        }
+        setBaseline(JSON.stringify({records:saved,extracted:candidates}));
+      }else if(sharedStore&&reextracting){
+        // Preserve saved candidates and positions, and append only newly detected labels.
+        const combined=new Map(extracted.map(a=>[a.label,a]));
+        for(const a of candidates)if(!combined.has(a.label))combined.set(a.label,a);
+        candidates=[...combined.values()];
+      }
       host.current.replaceChildren(res.canvas);
       lastBuffer.current = { buffer, name };
-      setExtracted(res.assets); setRegion(res.region);setRegionBounds(res.regionBounds); setFileName(name); setHash(digest); setRecords(saved);
+      setExtracted(candidates); setRegion(res.region);setRegionBounds(res.regionBounds); setFileName(name); setHash(digest); setRecords(saved);
       setHidden([]); setDiscFilter(DISCIPLINES);
       if (!res.hasText) setError("This PDF has no searchable text. You can still add call-off circles manually.");
       else if (!res.assets.length) setError("No automatic candidates found. Use Add call-off to mark assets manually.");
@@ -173,7 +226,7 @@ export default function AssetViewer({ context = null, initialPdf = null, onScrat
     const f = e.target.files[0]; e.target.value = "";
     if (f) { try { await load(await f.arrayBuffer(), f.name); } catch (err) { setError("Could not open PDF: " + err.message); } }
   };
-  const reextract = () => lastBuffer.current && load(lastBuffer.current.buffer, lastBuffer.current.name, true);
+  const reextract = () => canEdit&&!saving&&lastBuffer.current && load(lastBuffer.current.buffer, lastBuffer.current.name, true);
   const assets = [
     ...extracted.map(a => ({ ...a, id: autoId(a.label), manual: false, discipline: "Unassigned", ...records.overrides[autoId(a.label)] })).filter(a => !a.dismissed),
     ...Object.values(records.manual),
@@ -184,16 +237,17 @@ export default function AssetViewer({ context = null, initialPdf = null, onScrat
   const dismissedCount = Object.values(records.overrides).filter(a => a.dismissed).length;
 
   function update(id, patch) {
+    if(!canEdit||saving)return;
     const bucket = id.startsWith("manual:") ? "manual" : "overrides";
     setRecords(r => ({ ...r, [bucket]: { ...r[bucket], [id]: { ...r[bucket][id], ...patch } } }));
   }
-  function selectAsset(id) { setSelected(id); if(id)openSection("editor"); setMode("select"); setLinkTitle(""); setLinkUrl(""); }
+  function selectAsset(id) { setSelected(id); if(id){openSection("editor");setSidebarOpen(true);} setMode("select"); setLinkTitle(""); setLinkUrl(""); }
   function reveal(a) {
     setHidden(h => h.filter(s => s !== a.status));
     setDiscFilter(d => d.includes(a.discipline) ? d : [...d, a.discipline]);
   }
   function planClick(e) {
-    if (busy || !fileName) return;
+    if (busy || saving || !canEdit || !fileName) return;
     if (mode === "select") return;
     const rect = host.current?.getBoundingClientRect();
     if (!rect || !rect.width || !rect.height) return;
@@ -242,6 +296,7 @@ export default function AssetViewer({ context = null, initialPdf = null, onScrat
     if (!rect?.width || !rect.height) return;
     e.stopPropagation();
     selectAsset(asset.id);
+    if(!canEdit||saving)return;
     dragRef.current = {
       id: asset.id, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY,
       offsetX: e.clientX - (rect.left + asset.x * rect.width),
@@ -286,7 +341,7 @@ export default function AssetViewer({ context = null, initialPdf = null, onScrat
   }
 
   function nudge(e, asset) {
-    if (busy || mode !== "select" || dragRef.current) return;
+    if (busy || saving || !canEdit || mode !== "select" || dragRef.current) return;
     const directions = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
     const dir = directions[e.key];
     const rect = host.current?.getBoundingClientRect();
@@ -312,7 +367,7 @@ export default function AssetViewer({ context = null, initialPdf = null, onScrat
     setMode("select");
   }
   function acceptSymbols(matches) {
-    if(!matches.length)return;
+    if(!canEdit||saving||!matches.length)return;
     const additions={};
     for(const m of matches){
       const id="manual:"+crypto.randomUUID();
@@ -327,7 +382,7 @@ export default function AssetViewer({ context = null, initialPdf = null, onScrat
     setSymbolNotice("Added "+matches.length+" graphical candidate"+(matches.length===1?"":"s")+" for engineer review.");
   }
   function removeSelected() {
-    if (!sel || !window.confirm(sel.manual ? "Delete this manual call-off?" : "Dismiss this extracted candidate? You can restore dismissed candidates.")) return;
+    if (!canEdit || saving || !sel || !window.confirm(sel.manual ? "Delete this manual call-off?" : "Dismiss this extracted candidate? You can restore dismissed candidates.")) return;
     if (sel.manual) setRecords(r => {
       const manual = { ...r.manual }; delete manual[sel.id]; return { ...r, manual };
     });
@@ -335,6 +390,7 @@ export default function AssetViewer({ context = null, initialPdf = null, onScrat
     selectAsset(null);
   }
   function restoreDismissed() {
+    if(!canEdit||saving)return;
     setRecords(r => ({ ...r, overrides: Object.fromEntries(Object.entries(r.overrides).map(([id, p]) => {
       const { dismissed, ...rest } = p; return [id, rest];
     })) }));
@@ -383,25 +439,35 @@ export default function AssetViewer({ context = null, initialPdf = null, onScrat
   }
 
   return (
-    <div className="app">
-      <div className="bar">
+    <div className={"app swViewer"+(sidebarOpen?"":" sidebarClosed")}>
+      <div className="bar swViewerToolbar">
         {context?.backHref && <Link className="viewerBack" href={context.backHref}>← Scheme workspace</Link>}
         <h1>{context?.title || "Scheme Plan Asset Viewer"}</h1>
         {!context?.shared && <label><button disabled={busy} onClick={e => e.currentTarget.nextSibling.click()}>Open PDF…</button>
           <input type="file" accept="application/pdf" onChange={onFile} hidden disabled={busy} /></label>}
+        {canEdit&&<button aria-expanded={settingsOpen} onClick={()=>setSettingsOpen(v=>!v)} disabled={busy||saving}>Extraction settings</button>}
+        {canEdit&&settingsOpen&&<div className="viewerSettings">
         <label className="note"><input type="checkbox" checked={restrict} onChange={e => setRestrict(e.target.checked)} style={{width:"auto"}} /> ignore title block &amp; notes</label>
         {restrict && <label className="note">Layout <select style={{width:"auto"}} value={regionMode} onChange={e => setRegionMode(e.target.value)}>
           <option value="auto">Auto detect</option><option value="standard">Standard</option><option value="wide">Wide plan (left 60%)</option><option value="strip">Long strip plan</option>
-        </select></label>}
-        {fileName && <>
-          <button onClick={reextract} disabled={busy}>Re-extract</button>
-          <button disabled={busy} onClick={()=>{setMode("select");setSymbolOpen(true);}}>Find symbols (beta)</button>
-          <button className={mode === "add" ? "calloffActive" : ""} aria-pressed={mode === "add"} disabled={busy} onClick={() => setMode(m => m === "add" ? "select" : "add")}>＋ Add call-off</button>
+        </select></label>}</div>}
+        {fileName && canEdit && <>
+          <button onClick={reextract} disabled={busy||saving}>Re-extract</button>
+          <button disabled={busy||saving} onClick={()=>{setMode("select");setSymbolOpen(true);}}>Find symbols (beta)</button>
+          <button className={mode === "add" ? "calloffActive" : ""} aria-pressed={mode === "add"} disabled={busy||saving} onClick={() => {setShowMarkers(true);setMode(m => m === "add" ? "select" : "add");}}>＋ Add call-off</button>
           {mode !== "select" && <button onClick={() => setMode("select")}>Cancel (Esc)</button>}
         </>}
         <span style={{flex:1}} />
         <button onClick={() => setZoom(z => Math.max(50,z-25))}>−</button><span className="note">{zoom}%</span><button onClick={() => setZoom(z => Math.min(1200,z+25))}>+</button>
-        <span className="note">{context?.shared ? "Stored PDF · call-off edits are not saved yet" : "PDF and call-offs stay in this browser."}</span>
+        <button onClick={()=>setZoom(100)} title="Fit drawing width">Fit width</button>
+        <button aria-pressed={showMarkers} onClick={()=>setShowMarkers(v=>!v)}>{showMarkers?"Hide circles":"Show circles"}</button>
+        <button aria-expanded={sidebarOpen} onClick={()=>setSidebarOpen(v=>!v)}>{sidebarOpen?"Hide sidebar":"Show sidebar"}</button>
+        {sharedStore&&<div className="viewerSaveGroup">
+          <span role="status" className="note">{saving?"Saving…":hasScratchChanges?"Unsaved changes":savedVersion?"Shared draft · v"+savedVersion:"Not saved yet"}{!canEdit?" · Read only":""}</span>
+          {canEdit&&<button className="swPrimary" disabled={busy||saving||!fileName||baseline===null||(!hasScratchChanges&&!!savedVersion)} onClick={saveShared}>{saving?"Saving…":"Save call-offs"}</button>}
+        </div>}
+        {!context?.shared&&<span className="note">Local prototype</span>}
+        {saveError&&<div className="viewerSaveError error" role="alert">{saveError}</div>}
       </div>
       <div className={"viewer" + (fileName && mode === "select" ? " panReady" : "") + (panning ? " panning" : "")} onPointerDown={startPan} onPointerMove={movePan} onPointerUp={finishPan} onPointerCancel={finishPan} onLostPointerCapture={finishPan}>
         {!fileName && !busy && <p className="note">{context?.shared ? "Opening stored PDF… If loading fails, close the viewer and reopen the drawing." : "Open a PDF drawing you are permitted to use. You can add call-offs even when no automatic assets are detected."}</p>}
@@ -409,11 +475,11 @@ export default function AssetViewer({ context = null, initialPdf = null, onScrat
         {mode === "add" && <div className="calloffHint" role="status">Click the drawing to place a new call-off circle.</div>}
         <div className={"stage" + (mode !== "select" ? " placing" : "")} style={{width:`${zoom}%`}} onClick={planClick}>
           <div ref={host} />
-          {visible.map(a => {
+          {showMarkers&&visible.map(a => {
             const moving = dragPreview?.id === a.id;
             const point = moving ? dragPreview : a;
             return (
-              <button key={a.id} type="button" title={`${a.label || "Untitled call-off"} · ${STATUS_COLOURS[safeStatus(a.status)].label} · Drag to move`}
+              <button key={a.id} type="button" title={`${a.label || "Untitled call-off"} · ${STATUS_COLOURS[safeStatus(a.status)].label} ${canEdit?" · Drag to move":""}`}
                 aria-label={`Select or move ${a.label || "Untitled call-off"}`}
                 className={"marker" + (a.id === selected ? " sel" : "") + (moving ? " dragging" : "")}
                 style={{left:`${point.x*100}%`,top:`${point.y*100}%`,borderColor:colour(safeStatus(a.status)),pointerEvents:mode !== "select" ? "none" : undefined}}
@@ -422,18 +488,20 @@ export default function AssetViewer({ context = null, initialPdf = null, onScrat
                 onPointerCancel={cancelDrag} onLostPointerCapture={cancelDrag}
                 onKeyDown={e => nudge(e, a)}
                 onClick={e => { e.stopPropagation(); if (e.detail === 0) selectAsset(a.id); }}
-                disabled={busy || mode !== "select"} />
+                disabled={busy || saving || mode !== "select"} />
             );
           })}
-          {mode==="select"&&symbolMatches.map(m=><button type="button" key={m.id} className="marker symbolCandidate" title={`${typeLabel(m.type)} • shape score ${Math.round(m.score*100)}% • click to add for review`}
+          {showMarkers&&mode==="select"&&symbolMatches.map(m=><button type="button" key={m.id} className="marker symbolCandidate" title={`${typeLabel(m.type)} • shape score ${Math.round(m.score*100)}% • click to add for review`}
             aria-label={`Add suggested ${typeLabel(m.type)} for review`} style={{left:m.x*100+"%",top:m.y*100+"%"}}
             onClick={e=>{e.stopPropagation();acceptSymbols([m]);}}/>)}
         </div>
       </div>
-      <aside className={"side calloffSide" + (sel ? " hasSelection" : "")}>
+      <aside hidden={!sidebarOpen} className={"side calloffSide" + (sel ? " hasSelection" : "")}>
         {error && <div className="error" role="alert">{error}</div>}
         {storageError && <div className="error" role="alert">{storageError}</div>}
-        <h2>{assets.length} call-offs</h2>
+        <div className="viewerSidebarTitle"><div><h2>Call-offs <span>{assets.length}</span></h2><p className="note">{sharedStore?"Shared draft · engineering verification required":"Local drawing register"}</p></div></div>
+        {saveMessage&&!hasScratchChanges&&<p className="note" role="status">{saveMessage}</p>}
+        {sharedStore&&!savedVersion&&<p className="note">Automatic candidates are not saved until an editor saves the call-off draft.</p>}
         {symbolNotice&&<SidebarSection title={`Graphical review${symbolMatches.length?" ("+symbolMatches.length+")":""}`} open={sections.suggestions} onToggle={()=>toggleSection("suggestions")}><div className="symbolNotice"><p>{symbolNotice}</p>
           {!!symbolMatches.length&&<><p className="note">Dashed circles are temporary suggestions. Check for duplicates or non-equipment graphics.</p><div className="chips"><button onClick={()=>{if(window.confirm("Add all "+symbolMatches.length+" suggestions as unverified call-offs? Check them for duplicates and false matches."))acceptSymbols(symbolMatches);}}>Add all for review</button><button onClick={()=>{setSymbolMatches([]);setSymbolNotice("");}}>Clear suggestions</button></div></>}
           {!symbolMatches.length&&<button onClick={()=>setSymbolNotice("")}>Dismiss</button>}
@@ -446,16 +514,16 @@ export default function AssetViewer({ context = null, initialPdf = null, onScrat
           action={<button type="button" onClick={() => setDiscFilter(d => d.length === DISCIPLINES.length ? [] : DISCIPLINES)}>{discFilter.length === DISCIPLINES.length ? "Hide all" : "Show all"}</button>}>
           <div className="disciplineGrid">{DISCIPLINES.map(d => <label key={d}><input type="checkbox" checked={discFilter.includes(d)} onChange={e => setDiscFilter(old => e.target.checked ? [...new Set([...old,d])] : old.filter(x => x !== d))} />{d}</label>)}</div>
         </SidebarSection>
-        <SidebarSection title={`Individual assets (${visible.length})`} open={sections.assets} onToggle={()=>toggleSection("assets")}><div className="list" aria-label="Call-off list">
-          {[...visible].sort((a,b) => a.label.localeCompare(b.label)).map(a => <button type="button" key={a.id} className={"row" + (a.id === selected ? " sel" : "")} onClick={() => selectAsset(a.id)} disabled={busy}><span className="dot" style={{background:colour(safeStatus(a.status))}} />{a.label || "Untitled call-off"}<small>{typeLabel(a.type)} · {a.source==="symbol"?"symbol":a.manual ? "manual" : "auto"}</small></button>)}
+        <SidebarSection title={`Individual assets (${visible.length})`} open={sections.assets} onToggle={()=>toggleSection("assets")}><input className="assetSearch" aria-label="Search visible assets" placeholder="Find an asset…" value={assetSearch} onChange={e=>setAssetSearch(e.target.value)}/><div className="list" aria-label="Call-off list">
+          {[...visible].filter(a=>[a.label,typeLabel(a.type),a.discipline].some(v=>String(v||"").toLowerCase().includes(assetSearch.trim().toLowerCase()))).sort((a,b) => a.label.localeCompare(b.label)).map(a => <button type="button" key={a.id} className={"row" + (a.id === selected ? " sel" : "")} onClick={() => selectAsset(a.id)} disabled={busy}><span className="dot" style={{background:colour(safeStatus(a.status))}} />{a.label || "Untitled call-off"}<small>{typeLabel(a.type)} · {a.source==="symbol"?"symbol":a.manual ? "manual" : "auto"}</small></button>)}
         </div>
-        {!!dismissedCount && <button disabled={busy} onClick={restoreDismissed}>Restore dismissed candidates ({dismissedCount})</button>}
+        {canEdit && !!dismissedCount && <button disabled={busy||saving} onClick={restoreDismissed}>Restore dismissed candidates ({dismissedCount})</button>}
         </SidebarSection>
         {sel ? (
           <SidebarSection className="selectedAssetSection" title={`Review · ${sel.label||"Untitled call-off"}`} open={sections.editor} onToggle={()=>toggleSection("editor")}
             action={<button type="button" onClick={() => selectAsset(null)} aria-label="Close call-off editor">Done ×</button>}>
             <div className="calloffEditorScroll">
-          <fieldset className="calloffEditor" disabled={busy}>
+          <fieldset className="calloffEditor" disabled={busy||saving||!canEdit}>
             <legend className="srOnly">Call-off details</legend>
             <span className="note">{sel.source==="symbol"?"Graphical candidate":sel.manual?"Manual call-off":"Extracted candidate"}</span>
             <SidebarSection title="Asset classification" open={sections.classification} onToggle={()=>toggleSection("classification")}>
@@ -480,7 +548,7 @@ export default function AssetViewer({ context = null, initialPdf = null, onScrat
           </fieldset>
             </div>
           </SidebarSection>
-        ) : fileName && <p className="note">Select a circle or choose Add call-off to place one. Drag circles directly to reposition them.</p>}
+        ) : fileName && <p className="note">{canEdit?"Select a circle or choose Add call-off to place one.":"Select a circle to inspect its details."}</p>}
         {fileName && !context?.shared && <div className="chips" style={{marginTop:"auto"}}><button disabled={busy} onClick={exportJson}>Export JSON</button><label><button disabled={busy} onClick={e => e.currentTarget.nextSibling.click()}>Import JSON</button><input type="file" accept="application/json" onChange={importJson} hidden disabled={busy} /></label></div>}
       </aside>
       {symbolOpen&&<SymbolFinder targetCanvas={host.current?.querySelector("canvas")} region={regionBounds||undefined} onClose={()=>setSymbolOpen(false)} onMatches={receiveSymbols}/>}
