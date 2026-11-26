@@ -101,7 +101,7 @@ export default function DrawingRegister({db,user,scheme,project,canUpload,onClos
         discipline:draft.discipline,description:draft.description.trim(),filename:file.name,byte_size:file.size,fingerprint:hash
       }).select(cols).single());
       try{await complete(row,file);}
-      catch(e){setRetry(row.id);throw Error("Drawing registered but upload is incomplete. Resume the pending record: "+e.message);}
+      catch(e){setRetry(row.id);throw Error("Drawing registered but upload is incomplete. The pending record is in the root folder; resume it there: "+e.message);}
       finally{setDraft(empty);setFile(null);if(input.current)input.current.value="";await refresh();}
       setUploadOpen(false);
       try{await moveDrawing(row,folderId);setNotice("PDF uploaded and verified.");}catch(e){setNotice("PDF uploaded to the root. Move it to the desired folder manually.");}
@@ -133,7 +133,7 @@ export default function DrawingRegister({db,user,scheme,project,canUpload,onClos
     <p className="note">Private PDF revisions · shared with authorised project members. Only upload files approved for this development environment.</p>
     {error&&<p className="error" role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
     <div className="folderToolbar">
-      <nav className="folderTrail" aria-label="Drawing folders"><button disabled={busy} onClick={()=>navigateFolder(null)}>All drawings</button>{trail.map(f=><span key={f.id}> / <button disabled={busy} onClick={()=>navigateFolder(f.id)}>{f.name}</button></span>)}</nav>
+      <nav className="folderTrail" aria-label="Drawing folders"><button disabled={busy} onClick={()=>navigateFolder(null)}>Drawing register</button>{trail.map(f=><span key={f.id}> / <button disabled={busy} onClick={()=>navigateFolder(f.id)}>{f.name}</button></span>)}</nav>
       <div className="chips">{canUpload&&<><button disabled={busy} onClick={()=>{setFolderForm("new");setFolderName("");}}>＋ New folder</button>{folder&&<button disabled={busy} onClick={()=>{setFolderForm("rename");setFolderName(folder.name);}}>Rename folder</button>}</>}<button disabled={busy||loading} onClick={refresh}>Refresh</button></div>
     </div>
     <input className="drawingSearch" aria-label="Search all drawings" placeholder="Search drawings across all folders…" value={search} onChange={e=>setSearch(e.target.value)}/>
