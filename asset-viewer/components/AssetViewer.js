@@ -58,6 +58,8 @@ export default function AssetViewer({ context = null }) {
   const host = useRef(null);
   const lastBuffer = useRef(null);
   const activeLoad = useRef(false);
+  const dragRef = useRef(null);
+  const [dragPreview, setDragPreview] = useState(null);
   const [fileName, setFileName] = useState("");
   const [hash, setHash] = useState("");
   const [extracted, setExtracted] = useState([]);
@@ -84,14 +86,20 @@ export default function AssetViewer({ context = null }) {
   }, [key, records]);
 
   useEffect(() => {
-    const cancel = e => { if (e.key === "Escape") setMode("select"); };
+    const cancel = e => {
+      if (e.key !== "Escape") return;
+      if (dragRef.current) { dragRef.current = null; setDragPreview(null); return; }
+      if (mode !== "select") { setMode("select"); return; }
+      setSelected(null);
+      setLinkTitle(""); setLinkUrl("");
+    };
     window.addEventListener("keydown", cancel);
     return () => window.removeEventListener("keydown", cancel);
-  }, []);
+  }, [mode]);
 
   async function load(buffer, name, reextracting = false) {
     if (activeLoad.current) return;
-    activeLoad.current = true; setBusy(true); setError(""); setMode("select"); setSelected(null);
+    activeLoad.current = true; dragRef.current = null; setDragPreview(null); setBusy(true); setError(""); setMode("select"); setSelected(null);
     try {
       const digest = reextracting ? hash : await fingerprint(buffer);
       const res = await extractFromPdf(buffer.slice(0), { restrictToDrawing: restrict, regionMode });
@@ -146,12 +154,12 @@ export default function AssetViewer({ context = null }) {
     setDiscFilter(d => d.includes(a.discipline) ? d : [...d, a.discipline]);
   }
   function planClick(e) {
-    if (busy || !fileName || mode === "select") return;
+    if (busy || !fileName) return;
+    if (mode === "select") { selectAsset(null); return; }
     const rect = host.current?.getBoundingClientRect();
     if (!rect || !rect.width || !rect.height) return;
     const point = { x:(e.clientX-rect.left)/rect.width, y:(e.clientY-rect.top)/rect.height };
     if (!validPoint(point)) return;
-    if (mode === "move" && sel) { update(sel.id, point); setMode("select"); return; }
     if (mode === "add") {
       const id = "manual:" + crypto.randomUUID();
       const a = { ...point, id, manual: true, label: "Untitled call-off", type: "unclassified", discipline: "Unassigned", status: "REVIEW" };
@@ -159,6 +167,73 @@ export default function AssetViewer({ context = null }) {
       reveal(a); selectAsset(id);
     }
   }
+  // Pointer capture keeps dragging active even outside the circle. Keep the
+  // live preview separate from persisted records; commit only on release.
+  function startDrag(e, asset) {
+    if (busy || mode !== "select" || e.button !== 0 || !e.isPrimary || dragRef.current) return;
+    const rect = host.current?.getBoundingClientRect();
+    if (!rect?.width || !rect.height) return;
+    e.stopPropagation();
+    selectAsset(asset.id);
+    dragRef.current = {
+      id: asset.id, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY,
+      offsetX: e.clientX - (rect.left + asset.x * rect.width),
+      offsetY: e.clientY - (rect.top + asset.y * rect.height), moved: false,
+    };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }
+
+  function dragPoint(e, drag) {
+    const rect = host.current?.getBoundingClientRect();
+    if (!rect?.width || !rect.height) return null;
+    const clamp = n => Math.min(1, Math.max(0, n));
+    return {
+      x: clamp((e.clientX - rect.left - drag.offsetX) / rect.width),
+      y: clamp((e.clientY - rect.top - drag.offsetY) / rect.height),
+    };
+  }
+
+  function moveDrag(e) {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    if (!drag.moved && Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY) < 3) return;
+    drag.moved = true;
+    const point = dragPoint(e, drag);
+    if (point) setDragPreview({ id: drag.id, ...point });
+  }
+
+  function endDrag(e) {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    const moved = drag.moved || Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY) >= 3;
+    const point = moved ? dragPoint(e, drag) : null;
+    dragRef.current = null;
+    setDragPreview(null);
+    if (point) update(drag.id, point);
+  }
+
+  function cancelDrag(e) {
+    if (dragRef.current?.pointerId !== e.pointerId) return;
+    dragRef.current = null;
+    setDragPreview(null);
+  }
+
+  function nudge(e, asset) {
+    if (busy || mode !== "select" || dragRef.current) return;
+    const directions = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+    const dir = directions[e.key];
+    const rect = host.current?.getBoundingClientRect();
+    if (!dir || !rect?.width || !rect.height) return;
+    e.preventDefault(); e.stopPropagation();
+    const pixels = e.shiftKey ? 10 : 1;
+    const clamp = n => Math.min(1, Math.max(0, n));
+    selectAsset(asset.id);
+    update(asset.id, {
+      x: clamp(asset.x + dir[0] * pixels / rect.width),
+      y: clamp(asset.y + dir[1] * pixels / rect.height),
+    });
+  }
+
   function removeSelected() {
     if (!sel || !window.confirm(sel.manual ? "Delete this manual call-off?" : "Dismiss this extracted candidate? You can restore dismissed candidates.")) return;
     if (sel.manual) setRecords(r => {
@@ -238,18 +313,28 @@ export default function AssetViewer({ context = null }) {
       <div className="viewer">
         {!fileName && !busy && <p className="note">Open a PDF drawing you are permitted to use. You can add call-offs even when no automatic assets are detected.</p>}
         {busy && <p className="note">Reading plan…</p>}
-        {mode !== "select" && <div className="calloffHint" role="status">{mode === "add" ? "Click the drawing to place a new call-off circle." : "Click the drawing to move the selected circle."}</div>}
+        {mode === "add" && <div className="calloffHint" role="status">Click the drawing to place a new call-off circle.</div>}
         <div className={"stage" + (mode !== "select" ? " placing" : "")} style={{width:`${zoom}%`}} onClick={planClick}>
           <div ref={host} />
-          {visible.map(a => (
-            <button key={a.id} title={`${a.label || "Untitled call-off"} · ${STATUS_COLOURS[safeStatus(a.status)].label}`} aria-label={`Select ${a.label || "Untitled call-off"}`}
-              className={"marker" + (a.id === selected ? " sel" : "")}
-              style={{left:`${a.x*100}%`,top:`${a.y*100}%`,borderColor:colour(safeStatus(a.status)),pointerEvents:mode !== "select" ? "none" : undefined}}
-              onClick={e => { e.stopPropagation(); selectAsset(a.id); }} disabled={busy} />
-          ))}
+          {visible.map(a => {
+            const moving = dragPreview?.id === a.id;
+            const point = moving ? dragPreview : a;
+            return (
+              <button key={a.id} type="button" title={`${a.label || "Untitled call-off"} · ${STATUS_COLOURS[safeStatus(a.status)].label} · Drag to move`}
+                aria-label={`Select or move ${a.label || "Untitled call-off"}`}
+                className={"marker" + (a.id === selected ? " sel" : "") + (moving ? " dragging" : "")}
+                style={{left:`${point.x*100}%`,top:`${point.y*100}%`,borderColor:colour(safeStatus(a.status)),pointerEvents:mode !== "select" ? "none" : undefined}}
+                onPointerDown={e => startDrag(e, a)}
+                onPointerMove={moveDrag} onPointerUp={endDrag}
+                onPointerCancel={cancelDrag} onLostPointerCapture={cancelDrag}
+                onKeyDown={e => nudge(e, a)}
+                onClick={e => { e.stopPropagation(); if (e.detail === 0) selectAsset(a.id); }}
+                disabled={busy || mode !== "select"} />
+            );
+          })}
         </div>
       </div>
-      <aside className="side">
+      <aside className={"side calloffSide" + (sel ? " hasSelection" : "")}>
         {error && <div className="error" role="alert">{error}</div>}
         {storageError && <div className="error" role="alert">{storageError}</div>}
         <h2>{assets.length} call-offs</h2>
@@ -257,22 +342,26 @@ export default function AssetViewer({ context = null }) {
         <div className="chips">
           {STATUS_ORDER.map(s => <button key={s} className={"chip" + (hidden.includes(s) ? " off" : "")} aria-pressed={!hidden.includes(s)} onClick={() => setHidden(h => h.includes(s) ? h.filter(x => x !== s) : [...h,s])}><span className="dot" style={{background:colour(s)}} />{STATUS_COLOURS[s].label} ({counts[s]})</button>)}
         </div>
-        <details className="disciplineFilters" open>
-          <summary>Disciplines ({visible.length} visible)</summary>
+        <section className="disciplineFilters" aria-label="Discipline filters">
+          <div className="disciplineHeading"><strong>Disciplines ({visible.length} visible)</strong><button type="button" onClick={() => setDiscFilter(d => d.length === DISCIPLINES.length ? [] : DISCIPLINES)}>{discFilter.length === DISCIPLINES.length ? "Hide all" : "Show all"}</button></div>
           <div className="disciplineGrid">{DISCIPLINES.map(d => <label key={d}><input type="checkbox" checked={discFilter.includes(d)} onChange={e => setDiscFilter(old => e.target.checked ? [...new Set([...old,d])] : old.filter(x => x !== d))} />{d}</label>)}</div>
-        </details>
-        <div className="list">
+        </section>
+        <div className="list" aria-label="Call-off list">
           {[...visible].sort((a,b) => a.label.localeCompare(b.label)).map(a => <button type="button" key={a.id} className={"row" + (a.id === selected ? " sel" : "")} onClick={() => selectAsset(a.id)} disabled={busy}><span className="dot" style={{background:colour(safeStatus(a.status))}} />{a.label || "Untitled call-off"}<small>{typeLabel(a.type)} · {a.manual ? "manual" : "auto"}</small></button>)}
         </div>
         {!!dismissedCount && <button disabled={busy} onClick={restoreDismissed}>Restore dismissed candidates ({dismissedCount})</button>}
         {sel ? (
+          <section className="calloffPane" aria-label="Selected call-off">
+            <div className="calloffPaneHeader"><strong>{sel.manual ? "Manual call-off" : "Extracted candidate"}</strong><button type="button" onClick={() => selectAsset(null)} aria-label="Close call-off editor">Done ×</button></div>
+            <div className="calloffEditorScroll">
           <fieldset className="calloffEditor" disabled={busy}>
-            <legend>{sel.manual ? "Manual call-off" : "Extracted candidate"}</legend>
+            <legend className="srOnly">Call-off details</legend>
             <label className="field">Asset reference / name<input value={sel.label} placeholder="e.g. whistle board WB01" onChange={e => update(sel.id,{label:e.target.value})} /></label>
             <label className="field">Discipline<select value={sel.discipline} onChange={e => changeDiscipline(e.target.value)}>{DISCIPLINES.map(d => <option key={d}>{d}</option>)}</select></label>
             <label className="field">Asset type<select value={sel.type} onChange={e => update(sel.id,{type:e.target.value})}>{[...new Set(["unclassified", ...TYPES[sel.discipline], sel.type])].map(t => <option key={t} value={t}>{typeLabel(t)}</option>)}</select></label>
             <label className="field">Asset status<select value={safeStatus(sel.status)} onChange={e => { const status=e.target.value; update(sel.id,{status}); setHidden(h => h.filter(s => s !== status)); }}>{STATUS_ORDER.map(s => <option key={s} value={s}>{STATUS_COLOURS[s].label}</option>)}</select></label>
-            <div className="chips"><button type="button" aria-pressed={mode === "move"} className={mode === "move" ? "calloffActive" : ""} onClick={() => { reveal(sel); setMode(m => m === "move" ? "select" : "move"); }}>Move circle</button><button type="button" onClick={removeSelected}>{sel.manual ? "Delete call-off" : "Dismiss candidate"}</button></div>
+            <p className="note calloffDragHelp">Drag the circle on the drawing. For fine adjustment, focus the circle and use the arrow keys (Shift for larger steps).</p>
+            <div className="chips"><button type="button" onClick={removeSelected}>{sel.manual ? "Delete call-off" : "Dismiss candidate"}</button></div>
             <label className="field">Owner<input value={sel.owner || ""} onChange={e => update(sel.id,{owner:e.target.value})} /></label>
             <label className="field">Notes, decisions, minutes<textarea rows={4} value={sel.notes || ""} onChange={e => update(sel.id,{notes:e.target.value})} /></label>
             <div className="field">Links to drawings and documents
@@ -280,7 +369,9 @@ export default function AssetViewer({ context = null }) {
               <input placeholder="Document title" value={linkTitle} onChange={e => setLinkTitle(e.target.value)} /><input placeholder="https://…" value={linkUrl} onChange={e => setLinkUrl(e.target.value)} /><button type="button" onClick={addLink}>Add link</button>
             </div>
           </fieldset>
-        ) : fileName && <p className="note">Select a circle or choose Add call-off to place one.</p>}
+            </div>
+          </section>
+        ) : fileName && <p className="note">Select a circle or choose Add call-off to place one. Drag circles directly to reposition them.</p>}
         {fileName && <div className="chips" style={{marginTop:"auto"}}><button disabled={busy} onClick={exportJson}>Export JSON</button><label><button disabled={busy} onClick={e => e.currentTarget.nextSibling.click()}>Import JSON</button><input type="file" accept="application/json" onChange={importJson} hidden disabled={busy} /></label></div>}
       </aside>
     </div>
