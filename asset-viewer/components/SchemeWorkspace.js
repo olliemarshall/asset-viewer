@@ -87,7 +87,7 @@ export default function SchemeWorkspace({ project, scheme }) {
   return (
     <main className="workspaceShell">
       <header className="workspaceTopbar">
-        <Link className="workspaceBrand" href="/projects">Engineering Workspace</Link>
+        <Link className="workspaceBrand" href="/projects">SchemeWorks</Link>
         <span className="workspaceTopbarNote">{project.name} / {scheme.name}</span>
       </header>
       <section className="workspaceContent schemeWorkspace">
