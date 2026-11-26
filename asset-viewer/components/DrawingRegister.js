@@ -21,6 +21,7 @@ export default function DrawingRegister({db,user,scheme,project,canUpload,onClos
   const [file,setFile]=useState(null),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false);
   const [error,setError]=useState(""),[notice,setNotice]=useState(""),[opened,setOpened]=useState(null);
   const [retry,setRetry]=useState(null);
+  const [scratchChanged,setScratchChanged]=useState(false);
   const input=useRef(null),live=useRef(true),working=useRef(false);
   useEffect(()=>{live.current=true;return()=>{live.current=false;};},[]);
   async function refresh(){
@@ -83,12 +84,12 @@ export default function DrawingRegister({db,user,scheme,project,canUpload,onClos
       const blob=assertResult(await db.storage.from(BUCKET).download(row.storage_path));
       const buffer=await blob.arrayBuffer();
       if(buffer.byteLength!==Number(row.byte_size)||await sha(buffer)!==row.fingerprint)throw Error("The downloaded PDF does not match its registered fingerprint.");
-      if(live.current)setOpened({row,buffer});
+      if(live.current){setScratchChanged(false);setOpened({row,buffer});}
     });
   }
   if(opened)return <div className="sharedDrawingOverlay">
-    <div className="sharedDrawingBanner"><button onClick={()=>setOpened(null)}>← Drawing register</button><span>{project.name} / {scheme.name} / {opened.row.reference} · Rev {opened.row.revision}</span><span>Local scratch call-offs only — export JSON before closing</span></div>
-    <AssetViewer key={opened.row.id} context={{scope:"shared:"+user.id+":"+opened.row.id,title:opened.row.title+" · Rev "+opened.row.revision,shared:true}} initialPdf={{buffer:opened.buffer,name:opened.row.filename}}/>
+    <div className="sharedDrawingBanner"><button onClick={()=>{if(!scratchChanged||window.confirm("Call-off edits are temporary and will be lost when you close this drawing. Close anyway?")){setOpened(null);setScratchChanged(false);}}}>← Drawing register</button><span>{project.name} / {scheme.name} / {opened.row.reference} · Rev {opened.row.revision}</span><span>Call-off edits are temporary until shared asset saving is implemented</span></div>
+    <AssetViewer key={opened.row.id} context={{scope:"shared:"+user.id+":"+opened.row.id,title:opened.row.title+" · Rev "+opened.row.revision,shared:true}} initialPdf={{buffer:opened.buffer,name:opened.row.filename}} onScratchChange={setScratchChanged}/>
   </div>;
   return <section className="drawingRegister">
     <div className="workspaceSectionHeading sharedSection"><h2>{scheme.name} — drawing register</h2><button disabled={busy} onClick={onClose}>Close</button></div>
