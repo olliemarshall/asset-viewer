@@ -401,7 +401,7 @@ export default function AssetViewer({ context = null, initialPdf = null, onScrat
     setDiscFilter(d => d.includes(discipline) ? d : [...d, discipline]);
   }
   function addLink() {
-    if (!sel || !linkUrl.trim()) return;
+    if (!canEdit || saving || !sel || !linkUrl.trim()) return;
     try {
       const url = new URL(/^https?:\/\//i.test(linkUrl.trim()) ? linkUrl.trim() : "https://" + linkUrl.trim());
       if (!["http:", "https:"].includes(url.protocol)) throw Error();
@@ -523,26 +523,26 @@ export default function AssetViewer({ context = null, initialPdf = null, onScrat
           <SidebarSection className="selectedAssetSection" title={`Review · ${sel.label||"Untitled call-off"}`} open={sections.editor} onToggle={()=>toggleSection("editor")}
             action={<button type="button" onClick={() => selectAsset(null)} aria-label="Close call-off editor">Done ×</button>}>
             <div className="calloffEditorScroll">
-          <fieldset className="calloffEditor" disabled={busy||saving||!canEdit}>
+          <fieldset className="calloffEditor" disabled={busy||saving}>
             <legend className="srOnly">Call-off details</legend>
             <span className="note">{sel.source==="symbol"?"Graphical candidate":sel.manual?"Manual call-off":"Extracted candidate"}</span>
             <SidebarSection title="Asset classification" open={sections.classification} onToggle={()=>toggleSection("classification")}>
             {sel.source==="symbol"&&<p className="note">Graphical match{sel.symbolRef?" · "+sel.symbolRef:""}{Number.isFinite(sel.similarity)?" · shape score "+Math.round(sel.similarity*100)+"%":""}. This score is not a probability. Verify the equipment, name and status.</p>}
-            <label className="field">Asset reference / name<input value={sel.label} placeholder="e.g. whistle board WB01" onChange={e => update(sel.id,{label:e.target.value})} /></label>
-            <label className="field">Discipline<select value={sel.discipline} onChange={e => changeDiscipline(e.target.value)}>{DISCIPLINES.map(d => <option key={d}>{d}</option>)}</select></label>
-            <label className="field">Asset type<select value={sel.type} onChange={e => update(sel.id,{type:e.target.value})}>{[...new Set(["unclassified", ...TYPES[sel.discipline], sel.type])].map(t => <option key={t} value={t}>{typeLabel(t)}</option>)}</select></label>
-            <label className="field">Asset status<select value={safeStatus(sel.status)} onChange={e => { const status=e.target.value; update(sel.id,{status}); setHidden(h => h.filter(s => s !== status)); }}>{STATUS_ORDER.map(s => <option key={s} value={s}>{STATUS_COLOURS[s].label}</option>)}</select></label>
+            <label className="field">Asset reference / name<input readOnly={!canEdit} value={sel.label} placeholder="e.g. whistle board WB01" onChange={e => update(sel.id,{label:e.target.value})} /></label>
+            <label className="field">Discipline<select disabled={!canEdit} value={sel.discipline} onChange={e => changeDiscipline(e.target.value)}>{DISCIPLINES.map(d => <option key={d}>{d}</option>)}</select></label>
+            <label className="field">Asset type<select disabled={!canEdit} value={sel.type} onChange={e => update(sel.id,{type:e.target.value})}>{[...new Set(["unclassified", ...TYPES[sel.discipline], sel.type])].map(t => <option key={t} value={t}>{typeLabel(t)}</option>)}</select></label>
+            <label className="field">Asset status<select disabled={!canEdit} value={safeStatus(sel.status)} onChange={e => { const status=e.target.value; update(sel.id,{status}); setHidden(h => h.filter(s => s !== status)); }}>{STATUS_ORDER.map(s => <option key={s} value={s}>{STATUS_COLOURS[s].label}</option>)}</select></label>
             </SidebarSection>
-            <p className="note calloffDragHelp">Drag the circle on the drawing. For fine adjustment, focus the circle and use the arrow keys (Shift for larger steps).</p>
-            <div className="chips"><button type="button" onClick={removeSelected}>{sel.manual ? "Delete call-off" : "Dismiss candidate"}</button></div>
+            {canEdit&&<p className="note calloffDragHelp">Drag the circle on the drawing. For fine adjustment, focus the circle and use the arrow keys (Shift for larger steps).</p>}
+            <div className="chips"><button type="button" disabled={!canEdit} onClick={removeSelected}>{sel.manual ? "Delete call-off" : "Dismiss candidate"}</button></div>
             <SidebarSection title="Owner and notes" open={sections.notes} onToggle={()=>toggleSection("notes")}>
-            <label className="field">Owner<input value={sel.owner || ""} onChange={e => update(sel.id,{owner:e.target.value})} /></label>
-            <label className="field">Notes, decisions, minutes<textarea rows={4} value={sel.notes || ""} onChange={e => update(sel.id,{notes:e.target.value})} /></label>
+            <label className="field">Owner<input readOnly={!canEdit} value={sel.owner || ""} onChange={e => update(sel.id,{owner:e.target.value})} /></label>
+            <label className="field">Notes, decisions, minutes<textarea readOnly={!canEdit} rows={4} value={sel.notes || ""} onChange={e => update(sel.id,{notes:e.target.value})} /></label>
             </SidebarSection>
             <SidebarSection title={`Linked documents (${(sel.links||[]).length})`} open={sections.links} onToggle={()=>toggleSection("links")}>
             <div className="field">Links to drawings and documents
-              {(sel.links || []).map((l,i) => <div className="linkrow" key={i}><a href={l.url} target="_blank" rel="noopener noreferrer">{l.title}</a><button type="button" onClick={() => update(sel.id,{links:sel.links.filter((_,j)=>j!==i)})}>✕</button></div>)}
-              <input placeholder="Document title" value={linkTitle} onChange={e => setLinkTitle(e.target.value)} /><input placeholder="https://…" value={linkUrl} onChange={e => setLinkUrl(e.target.value)} /><button type="button" onClick={addLink}>Add link</button>
+              {(sel.links || []).map((l,i) => <div className="linkrow" key={i}><a href={l.url} target="_blank" rel="noopener noreferrer">{l.title}</a><button type="button" disabled={!canEdit} onClick={() => update(sel.id,{links:sel.links.filter((_,j)=>j!==i)})}>✕</button></div>)}
+              <input disabled={!canEdit} placeholder="Document title" value={linkTitle} onChange={e => setLinkTitle(e.target.value)} /><input disabled={!canEdit} placeholder="https://…" value={linkUrl} onChange={e => setLinkUrl(e.target.value)} /><button type="button" disabled={!canEdit} onClick={addLink}>Add link</button>
             </div>
             </SidebarSection>
           </fieldset>
