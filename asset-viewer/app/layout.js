@@ -1,8 +1,8 @@
 import "./globals.css";
 
 export const metadata = {
-  title: "Scheme Plan Asset Viewer (prototype)",
-  description: "Click assets on a scheme plan to attach links, notes and status.",
+  title: "SchemeWorks | Engineering coordination",
+  description: "Coordinate engineering projects, schemes, drawings and assets in one workspace.",
 };
 
 export default function RootLayout({ children }) {
