@@ -218,7 +218,7 @@ function Portfolio({user}){
           {(project?canEditScheme&&project.status==="active":admin)&&<><button disabled={busy} onClick={()=>project?editScheme(item):editProject(item)}>Edit</button><button disabled={busy} onClick={()=>toggleStatus(project?"schemes":"projects",item)}>{item.status==="active"?"Archive":"Restore"}</button></>}</div>
         </article>)}</div>
       </>:<div className="swEmpty"><h2>Start with an organisation</h2><p>Create an organisation to manage engineering projects and schemes.</p></div>}
-      <footer className="swFooter">SchemeWorks · Development preview · Use approved test data only. Shared asset persistence is not yet implemented.</footer>
+      <footer className="swFooter">SchemeWorks · Development preview · Use approved test data only. Drawing call-offs are shared revision-specific drafts; engineering verification required.</footer>
     </main>
   </div>;
 }
