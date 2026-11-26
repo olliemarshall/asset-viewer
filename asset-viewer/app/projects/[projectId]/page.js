@@ -45,12 +45,12 @@ export default async function ProjectWorkspacePage({ params }) {
                   <div className="schemeMeta">
                     <span>{scheme.reference}</span>
                     <span>{scheme.location}</span>
-                    <span>{scheme.drawing}</span>
+                    <span>{scheme.drawings.length} drawing{scheme.drawings.length === 1 ? "" : "s"}</span>
                   </div>
                 </div>
               </div>
-              <Link className="primaryWorkspaceLink" href="/">
-                Open asset viewer <span aria-hidden="true">→</span>
+              <Link className="primaryWorkspaceLink" href={`/projects/${project.id}/schemes/${scheme.id}`}>
+                Open scheme workspace <span aria-hidden="true">→</span>
               </Link>
             </article>
           ))}
@@ -75,7 +75,7 @@ export default async function ProjectWorkspacePage({ params }) {
 
         <div className="workspaceNotice">
           <strong>Prototype boundary</strong>
-          <p>The scheme currently opens the existing PDF asset viewer. Project and scheme records are example data in code, not yet stored in a shared database.</p>
+          <p>Open a scheme to manage its drawings and supporting information. Project and scheme records are example data in code, not yet stored in a shared database.</p>
         </div>
       </section>
     </main>
