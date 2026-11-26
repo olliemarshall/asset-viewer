@@ -20,7 +20,7 @@ export const demoProjects = [
             title: "Scheme plan",
             reference: "26-NE-0012",
             revision: "1.2",
-            discipline: "Signalling",
+            discipline: "Unassigned",
           },
         ],
       },
