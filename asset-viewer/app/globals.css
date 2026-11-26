@@ -153,3 +153,7 @@ h2 { font-size:14px; margin:0; }
   .calloffPane { flex:0 0 auto; max-height:none; overflow:visible; }
   .calloffEditorScroll { overflow:visible; }
 }
+
+.viewer.panReady { cursor:grab; touch-action:none; }
+.viewer.panning,.viewer.panning canvas { cursor:grabbing; user-select:none; }
+.viewer.panReady canvas { user-select:none; -webkit-user-select:none; }
