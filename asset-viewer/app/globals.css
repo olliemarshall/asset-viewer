@@ -113,3 +113,18 @@ h2 { font-size:14px; margin:0; }
   .schemeRecord { flex-wrap:wrap; }
   .schemeTab { font-size:12px; padding:7px 8px; }
 }
+
+/* Engineer call-off controls */
+.calloffActive { background:var(--accent); color:var(--panel); border-color:var(--accent); font-weight:650; }
+.calloffHint { position:sticky; top:0; z-index:3; background:var(--panel); color:var(--accent); border:1px solid var(--accent); border-radius:6px; padding:10px 12px; margin-bottom:10px; font-size:13px; }
+.stage.placing,.stage.placing canvas { cursor:crosshair; }
+.calloffEditor { display:flex; flex-direction:column; gap:10px; border:1px solid var(--line); border-radius:8px; padding:12px; margin:0; min-width:0; }
+.calloffEditor legend { font-size:13px; font-weight:650; padding:0 5px; }
+.disciplineFilters { border:1px solid var(--line); border-radius:6px; padding:9px; font-size:12px; }
+.disciplineFilters summary { cursor:pointer; font-weight:650; }
+.disciplineGrid { display:grid; grid-template-columns:1fr 1fr; gap:6px; padding-top:8px; }
+.disciplineGrid label { display:flex; align-items:center; gap:6px; }
+.disciplineGrid input { width:auto; margin:0; }
+.side .list button.row { border-radius:0; border:0; border-bottom:1px solid var(--line); width:100%; text-align:left; background:transparent; }
+.side .list button.row.sel,.side .list button.row:hover { background:rgba(111,149,255,.15); }
+.side .list button.row small { text-align:right; font-size:10px; }
