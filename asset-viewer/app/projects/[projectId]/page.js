@@ -14,7 +14,7 @@ export default async function ProjectWorkspacePage({ params }) {
   return (
     <main className="workspaceShell">
       <header className="workspaceTopbar">
-        <Link className="workspaceBrand" href="/projects">Engineering Workspace</Link>
+        <Link className="workspaceBrand" href="/projects">SchemeWorks</Link>
         <span className="workspaceTopbarNote">Project portfolio / {project.name}</span>
       </header>
 
