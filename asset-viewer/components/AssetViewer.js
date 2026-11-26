@@ -57,7 +57,7 @@ async function fingerprint(buffer) {
   return Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2, "0")).join("");
 }
 
-export default function AssetViewer({ context = null }) {
+export default function AssetViewer({ context = null, initialPdf = null }) {
   const prefix = context ? `asset-viewer:${context.scope}:` : "asset-viewer:";
   const host = useRef(null);
   const lastBuffer = useRef(null);
@@ -90,7 +90,7 @@ export default function AssetViewer({ context = null }) {
 
   const key = hash ? prefix + "v2:" + hash : "";
   useEffect(() => {
-    if (!key) return;
+    if (!key || context?.shared) return;
     try { localStorage.setItem(key, JSON.stringify(records)); setStorageError(""); }
     catch { setStorageError("Could not save call-offs in this browser. Export JSON to retain your work."); }
   }, [key, records]);
@@ -118,9 +118,9 @@ export default function AssetViewer({ context = null }) {
       if (!reextracting && digest !== hash) {
         saved = blank();
         try {
-          const raw = localStorage.getItem(prefix + "v2:" + digest);
+          const raw = context?.shared ? null : localStorage.getItem(prefix + "v2:" + digest);
           if (raw) saved = cleanRecords(JSON.parse(raw));
-          else {
+          else if (!context?.shared) {
             // Preserve previous browser notes/status for matching auto labels only.
             const legacy = JSON.parse(localStorage.getItem(prefix + name) || "{}");
             for (const a of res.assets) if (Object.hasOwn(legacy, a.label)) {
@@ -139,6 +139,10 @@ export default function AssetViewer({ context = null }) {
     } catch (e) { setError("Could not read that PDF: " + e.message); }
     finally { activeLoad.current = false; setBusy(false); }
   }
+
+  useEffect(() => {
+    if (initialPdf) load(initialPdf.buffer, initialPdf.name);
+  }, [initialPdf?.buffer, initialPdf?.name]);
 
   const onFile = async e => {
     const f = e.target.files[0]; e.target.value = "";
@@ -355,10 +359,10 @@ export default function AssetViewer({ context = null }) {
   return (
     <div className="app">
       <div className="bar">
-        {context && <Link className="viewerBack" href={context.backHref}>← Scheme workspace</Link>}
+        {context?.backHref && <Link className="viewerBack" href={context.backHref}>← Scheme workspace</Link>}
         <h1>{context?.title || "Scheme Plan Asset Viewer"}</h1>
-        <label><button disabled={busy} onClick={e => e.currentTarget.nextSibling.click()}>Open PDF…</button>
-          <input type="file" accept="application/pdf" onChange={onFile} hidden disabled={busy} /></label>
+        {!context?.shared && <label><button disabled={busy} onClick={e => e.currentTarget.nextSibling.click()}>Open PDF…</button>
+          <input type="file" accept="application/pdf" onChange={onFile} hidden disabled={busy} /></label>}
         <label className="note"><input type="checkbox" checked={restrict} onChange={e => setRestrict(e.target.checked)} style={{width:"auto"}} /> ignore title block &amp; notes</label>
         {restrict && <label className="note">Layout <select style={{width:"auto"}} value={regionMode} onChange={e => setRegionMode(e.target.value)}>
           <option value="auto">Auto detect</option><option value="standard">Standard</option><option value="wide">Wide plan (left 60%)</option><option value="strip">Long strip plan</option>
@@ -371,10 +375,10 @@ export default function AssetViewer({ context = null }) {
         </>}
         <span style={{flex:1}} />
         <button onClick={() => setZoom(z => Math.max(50,z-25))}>−</button><span className="note">{zoom}%</span><button onClick={() => setZoom(z => Math.min(1200,z+25))}>+</button>
-        <span className="note">PDF and call-offs stay in this browser.</span>
+        <span className="note">{context?.shared ? "Stored PDF · call-offs are temporary scratch work" : "PDF and call-offs stay in this browser."}</span>
       </div>
       <div className={"viewer" + (fileName && mode === "select" ? " panReady" : "") + (panning ? " panning" : "")} onPointerDown={startPan} onPointerMove={movePan} onPointerUp={finishPan} onPointerCancel={finishPan} onLostPointerCapture={finishPan}>
-        {!fileName && !busy && <p className="note">Open a PDF drawing you are permitted to use. You can add call-offs even when no automatic assets are detected.</p>}
+        {!fileName && !busy && <p className="note">{context?.shared ? "Opening stored PDF… If loading fails, close the viewer and reopen the drawing." : "Open a PDF drawing you are permitted to use. You can add call-offs even when no automatic assets are detected."}</p>}
         {busy && <p className="note">Reading plan…</p>}
         {mode === "add" && <div className="calloffHint" role="status">Click the drawing to place a new call-off circle.</div>}
         <div className={"stage" + (mode !== "select" ? " placing" : "")} style={{width:`${zoom}%`}} onClick={planClick}>

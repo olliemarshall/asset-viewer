@@ -197,3 +197,11 @@ h2 { font-size:14px; margin:0; }
 .sharedInlineForm { display:flex; align-items:flex-end; gap:10px; margin-top:14px; flex-wrap:wrap; }
 .sharedInlineForm .field { flex:1; min-width:200px; }
 .sharedSection { margin-top:30px; }
+
+/* Private shared drawing viewer */
+.drawingRegister { margin-top:24px; border-top:1px solid var(--line); padding-top:10px; }
+.drawingRegister > .schemeList { margin-top:14px; }
+.sharedDrawingOverlay { position:fixed; inset:0; z-index:30; background:var(--bg); display:flex; flex-direction:column; }
+.sharedDrawingBanner { flex-shrink:0; display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:8px 12px; border-bottom:1px solid var(--line); background:var(--panel); font-size:12px; }
+.sharedDrawingBanner span:last-child { margin-left:auto; color:var(--muted); }
+.sharedDrawingOverlay .app { flex:1; min-height:0; height:auto; }
