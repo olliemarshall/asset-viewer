@@ -59,7 +59,7 @@ export default async function ProjectWorkspacePage({ params }) {
         <div className="workspaceColumns">
           <section className="workspaceInfoCard">
             <h2>Project structure</h2>
-            <p>This project is the container for its schemes. Each scheme will hold its drawings, asset register, disciplines, documents, discussions and actions.</p>
+            <p>This project is the container for its schemes. Each scheme has a workspace for drawings, asset viewing, document links, discussions and actions.</p>
           </section>
           <section className="workspaceInfoCard">
             <h2>Coming next</h2>
@@ -67,7 +67,7 @@ export default async function ProjectWorkspacePage({ params }) {
               <li>Scheme creation and editing</li>
               <li>Discipline registers and filters</li>
               <li>Shared document library</li>
-              <li>Actions, discussions and decisions</li>
+              <li>Shared records and audit history</li>
               <li>Team membership and permissions</li>
             </ul>
           </section>
