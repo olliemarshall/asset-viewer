@@ -142,7 +142,7 @@ export default function AssetViewer({ context = null, initialPdf = null }) {
 
   useEffect(() => {
     if (initialPdf) load(initialPdf.buffer, initialPdf.name);
-  }, [initialPdf]);
+  }, [initialPdf?.buffer, initialPdf?.name]);
 
   const onFile = async e => {
     const f = e.target.files[0]; e.target.value = "";
