@@ -128,3 +128,28 @@ h2 { font-size:14px; margin:0; }
 .side .list button.row { border-radius:0; border:0; border-bottom:1px solid var(--line); width:100%; text-align:left; background:transparent; }
 .side .list button.row.sel,.side .list button.row:hover { background:rgba(111,149,255,.15); }
 .side .list button.row small { text-align:right; font-size:10px; }
+
+/* Direct manipulation and non-collapsing sidebar */
+.stage .marker { cursor:grab; touch-action:none; user-select:none; -webkit-user-select:none; }
+.stage .marker.dragging { cursor:grabbing; z-index:5; }
+.stage .marker.sel { z-index:4; }
+.stage .marker:focus-visible { outline:2px solid #1687e8; outline-offset:4px; }
+.calloffSide { min-height:0; min-width:0; overflow-y:auto; }
+.calloffSide > * { flex-shrink:0; }
+.calloffSide > .note { margin:0; }
+.calloffSide > .list { height:210px; max-height:210px; min-height:100px; }
+.calloffSide.hasSelection > .list { height:112px; max-height:112px; }
+.calloffSide .list:empty { height:40px; min-height:40px; }
+.disciplineHeading { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.disciplineHeading button { font-size:11px; padding:3px 6px; }
+.calloffPane { display:flex; flex-direction:column; flex:1 0 180px; min-height:180px; min-width:0; overflow:hidden; border:1px solid var(--line); border-radius:8px; }
+.calloffPaneHeader { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 10px; border-bottom:1px solid var(--line); flex-shrink:0; background:var(--panel); font-size:13px; }
+.calloffPaneHeader button { font-size:12px; }
+.calloffEditorScroll { min-height:0; overflow-y:auto; overscroll-behavior:contain; }
+.calloffPane .calloffEditor { border:0; border-radius:0; }
+.calloffDragHelp { margin:0; line-height:1.4; }
+.srOnly { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+@media (max-width:800px) {
+  .calloffPane { flex:0 0 auto; max-height:none; overflow:visible; }
+  .calloffEditorScroll { overflow:visible; }
+}
