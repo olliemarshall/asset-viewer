@@ -16,6 +16,8 @@ export default function AssetViewer({ context = null }) {
   const [hidden, setHidden] = useState([]);
   const [zoom, setZoom] = useState(100);
   const [restrict, setRestrict] = useState(true);
+  const [regionMode, setRegionMode] = useState("auto");
+  const [region, setRegion] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [linkTitle, setLinkTitle] = useState("");
@@ -31,9 +33,10 @@ export default function AssetViewer({ context = null }) {
     setBusy(true); setError(""); setSelected(null);
     try {
       lastBuffer.current = { buffer, name };
-      const res = await extractFromPdf(buffer.slice(0), { restrictToDrawing: restrict });
+      const res = await extractFromPdf(buffer.slice(0), { restrictToDrawing: restrict, regionMode });
       host.current.replaceChildren(res.canvas);
       setAssets(res.assets);
+      setRegion(res.region);
       setFileName(name);
       setData(JSON.parse(localStorage.getItem(storeKey(name)) || "{}"));
       if (!res.hasText) setError("This PDF has no text layer (probably a scan). Text extraction can't find assets here; it would need OCR or a vision model.");
@@ -53,7 +56,7 @@ export default function AssetViewer({ context = null }) {
   const reextract = () => lastBuffer.current && load(lastBuffer.current.buffer, lastBuffer.current.name);
 
   const update = (label, patch) => setData((d) => ({ ...d, [label]: { ...d[label], ...patch } }));
-  const statusOf = (a) => data[a.label]?.status || a.status;
+  const statusOf = (a) => STATUS_COLOURS[data[a.label]?.status] ? data[a.label].status : a.status;
   const sel = assets.find((a) => a.label === selected);
   const selData = (sel && data[sel.label]) || {};
 
@@ -97,7 +100,12 @@ export default function AssetViewer({ context = null }) {
         <button onClick={() => loadSample("scheme_plan.pdf")}>Sample plan</button>
         <button onClick={() => loadSample("scheme_plan_scanned.pdf")}>Scanned sample</button>
         <label className="note"><input type="checkbox" checked={restrict} onChange={(e) => setRestrict(e.target.checked)} style={{ width: "auto" }} /> ignore title block &amp; notes</label>
-        {fileName && <button onClick={reextract}>Re-extract</button>}
+        {restrict && <label className="note">Layout <select style={{ width: "auto" }} value={regionMode} onChange={(e) => setRegionMode(e.target.value)}>
+          <option value="auto">Auto detect</option>
+          <option value="standard">Standard</option>
+          <option value="wide">Wide plan (left 60%)</option>
+        </select></label>}
+        {fileName && <button onClick={reextract} disabled={busy}>Re-extract</button>}
         <span style={{ flex: 1 }} />
         <button onClick={() => setZoom((z) => Math.max(50, z - 25))}>−</button>
         <span className="note">{zoom}%</span>
@@ -121,7 +129,8 @@ export default function AssetViewer({ context = null }) {
 
       <aside className="side">
         {error && <div className="error">{error}</div>}
-        <h2>{assets.length ? `${assets.length} assets found` : "Assets"}</h2>
+        <h2>{assets.length ? `${assets.length} candidate assets` : "Assets"}</h2>
+        {region && <p className="note">Extraction area: {region}. Labels and colour-derived status are suggestions; review against the drawing. Unlabelled symbols are not detected.</p>}
         <div className="chips">
           {STATUS_ORDER.map((s) => (
             <button key={s} className={"chip" + (hidden.includes(s) ? " off" : "")}
@@ -133,7 +142,7 @@ export default function AssetViewer({ context = null }) {
         <div className="list">
           {visible.sort((a, b) => a.label.localeCompare(b.label)).map((a) => (
             <div key={a.label} className={"row" + (a.label === selected ? " sel" : "")} onClick={() => setSelected(a.label)}>
-              <span className="dot" style={{ background: colour(statusOf(a)) }} />{a.label}<small>{a.type.replace("_", " ")}</small>
+              <span className="dot" style={{ background: colour(statusOf(a)) }} />{a.label}<small>{a.type.replaceAll("_", " ")}</small>
             </div>
           ))}
         </div>
