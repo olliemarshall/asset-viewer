@@ -57,7 +57,19 @@ async function fingerprint(buffer) {
   return Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2, "0")).join("");
 }
 
-export default function AssetViewer({ context = null, initialPdf = null }) {
+function SidebarSection({title,open,onToggle,children,action,className=""}) {
+  return <section className={"sidebarSection "+className}>
+    <div className="sidebarSectionHeader">
+      <button type="button" className="sidebarSectionToggle" aria-expanded={open} onClick={onToggle}>
+        <span className={"sidebarChevron"+(open?" expanded":"")} aria-hidden="true">›</span><span>{title}</span>
+      </button>
+      {action}
+    </div>
+    {open&&<div className="sidebarSectionBody">{children}</div>}
+  </section>;
+}
+
+export default function AssetViewer({ context = null, initialPdf = null, onScratchChange = null }) {
   const prefix = context ? `asset-viewer:${context.scope}:` : "asset-viewer:";
   const host = useRef(null);
   const lastBuffer = useRef(null);
@@ -71,6 +83,9 @@ export default function AssetViewer({ context = null, initialPdf = null }) {
   const [extracted, setExtracted] = useState([]);
   const [records, setRecords] = useState(blank);
   const [selected, setSelected] = useState(null);
+  const [sections,setSections]=useState({suggestions:true,status:true,disciplines:true,assets:true,editor:true,classification:true,notes:true,links:false});
+  const toggleSection=key=>setSections(old=>({...old,[key]:!old[key]}));
+  const openSection=key=>setSections(old=>old[key]?old:{...old,[key]:true});
   const [mode, setMode] = useState("select");
   const [hidden, setHidden] = useState([]);
   const [discFilter, setDiscFilter] = useState(DISCIPLINES);
@@ -89,6 +104,16 @@ export default function AssetViewer({ context = null, initialPdf = null }) {
   const [linkUrl, setLinkUrl] = useState("");
 
   const key = hash ? prefix + "v2:" + hash : "";
+  const hasScratchChanges=!!(Object.keys(records.manual).length||Object.keys(records.overrides).length);
+  useEffect(()=>{
+    if(context?.shared)onScratchChange?.(hasScratchChanges);
+  },[context?.shared,onScratchChange,hasScratchChanges]);
+  useEffect(()=>{
+    if(!context?.shared||!hasScratchChanges)return;
+    const warn=e=>{e.preventDefault();e.returnValue="";};
+    window.addEventListener("beforeunload",warn);
+    return()=>window.removeEventListener("beforeunload",warn);
+  },[context?.shared,hasScratchChanges]);
   useEffect(() => {
     if (!key || context?.shared) return;
     try { localStorage.setItem(key, JSON.stringify(records)); setStorageError(""); }
@@ -162,7 +187,7 @@ export default function AssetViewer({ context = null, initialPdf = null }) {
     const bucket = id.startsWith("manual:") ? "manual" : "overrides";
     setRecords(r => ({ ...r, [bucket]: { ...r[bucket], [id]: { ...r[bucket][id], ...patch } } }));
   }
-  function selectAsset(id) { setSelected(id); setMode("select"); setLinkTitle(""); setLinkUrl(""); }
+  function selectAsset(id) { setSelected(id); if(id)openSection("editor"); setMode("select"); setLinkTitle(""); setLinkUrl(""); }
   function reveal(a) {
     setHidden(h => h.filter(s => s !== a.status));
     setDiscFilter(d => d.includes(a.discipline) ? d : [...d, a.discipline]);
@@ -277,6 +302,7 @@ export default function AssetViewer({ context = null, initialPdf = null }) {
   }
 
   function receiveSymbols(result) {
+    openSection("suggestions");
     const matches=result.matches.map(m=>({...m,id:"suggestion:"+crypto.randomUUID(),type:result.type,symbolRef:result.ref}));
     setSymbolMatches(matches);
     setSymbolNotice(matches.length
@@ -375,7 +401,7 @@ export default function AssetViewer({ context = null, initialPdf = null }) {
         </>}
         <span style={{flex:1}} />
         <button onClick={() => setZoom(z => Math.max(50,z-25))}>−</button><span className="note">{zoom}%</span><button onClick={() => setZoom(z => Math.min(1200,z+25))}>+</button>
-        <span className="note">{context?.shared ? "Stored PDF · call-offs are temporary scratch work" : "PDF and call-offs stay in this browser."}</span>
+        <span className="note">{context?.shared ? "Stored PDF · call-off edits are not saved yet" : "PDF and call-offs stay in this browser."}</span>
       </div>
       <div className={"viewer" + (fileName && mode === "select" ? " panReady" : "") + (panning ? " panning" : "")} onPointerDown={startPan} onPointerMove={movePan} onPointerUp={finishPan} onPointerCancel={finishPan} onLostPointerCapture={finishPan}>
         {!fileName && !busy && <p className="note">{context?.shared ? "Opening stored PDF… If loading fails, close the viewer and reopen the drawing." : "Open a PDF drawing you are permitted to use. You can add call-offs even when no automatic assets are detected."}</p>}
@@ -408,46 +434,54 @@ export default function AssetViewer({ context = null, initialPdf = null }) {
         {error && <div className="error" role="alert">{error}</div>}
         {storageError && <div className="error" role="alert">{storageError}</div>}
         <h2>{assets.length} call-offs</h2>
-        {symbolNotice&&<div className="symbolNotice"><p>{symbolNotice}</p>
+        {symbolNotice&&<SidebarSection title={`Graphical review${symbolMatches.length?" ("+symbolMatches.length+")":""}`} open={sections.suggestions} onToggle={()=>toggleSection("suggestions")}><div className="symbolNotice"><p>{symbolNotice}</p>
           {!!symbolMatches.length&&<><p className="note">Dashed circles are temporary suggestions. Check for duplicates or non-equipment graphics.</p><div className="chips"><button onClick={()=>{if(window.confirm("Add all "+symbolMatches.length+" suggestions as unverified call-offs? Check them for duplicates and false matches."))acceptSymbols(symbolMatches);}}>Add all for review</button><button onClick={()=>{setSymbolMatches([]);setSymbolNotice("");}}>Clear suggestions</button></div></>}
           {!symbolMatches.length&&<button onClick={()=>setSymbolNotice("")}>Dismiss</button>}
-        </div>}
+        </div></SidebarSection>}
         {region && <p className="note">{region} · {assets.filter(a => a.manual).length} manual · {assets.filter(a => !a.manual).length} extracted. Verify all candidate labels and statuses.</p>}
-        <div className="chips">
+        <SidebarSection title="Asset status filters" open={sections.status} onToggle={()=>toggleSection("status")}><div className="chips">
           {STATUS_ORDER.map(s => <button key={s} className={"chip" + (hidden.includes(s) ? " off" : "")} aria-pressed={!hidden.includes(s)} onClick={() => setHidden(h => h.includes(s) ? h.filter(x => x !== s) : [...h,s])}><span className="dot" style={{background:colour(s)}} />{STATUS_COLOURS[s].label} ({counts[s]})</button>)}
-        </div>
-        <section className="disciplineFilters" aria-label="Discipline filters">
-          <div className="disciplineHeading"><strong>Disciplines ({visible.length} visible)</strong><button type="button" onClick={() => setDiscFilter(d => d.length === DISCIPLINES.length ? [] : DISCIPLINES)}>{discFilter.length === DISCIPLINES.length ? "Hide all" : "Show all"}</button></div>
+        </div></SidebarSection>
+        <SidebarSection title={`Disciplines (${discFilter.length}/${DISCIPLINES.length})`} open={sections.disciplines} onToggle={()=>toggleSection("disciplines")}
+          action={<button type="button" onClick={() => setDiscFilter(d => d.length === DISCIPLINES.length ? [] : DISCIPLINES)}>{discFilter.length === DISCIPLINES.length ? "Hide all" : "Show all"}</button>}>
           <div className="disciplineGrid">{DISCIPLINES.map(d => <label key={d}><input type="checkbox" checked={discFilter.includes(d)} onChange={e => setDiscFilter(old => e.target.checked ? [...new Set([...old,d])] : old.filter(x => x !== d))} />{d}</label>)}</div>
-        </section>
-        <div className="list" aria-label="Call-off list">
+        </SidebarSection>
+        <SidebarSection title={`Individual assets (${visible.length})`} open={sections.assets} onToggle={()=>toggleSection("assets")}><div className="list" aria-label="Call-off list">
           {[...visible].sort((a,b) => a.label.localeCompare(b.label)).map(a => <button type="button" key={a.id} className={"row" + (a.id === selected ? " sel" : "")} onClick={() => selectAsset(a.id)} disabled={busy}><span className="dot" style={{background:colour(safeStatus(a.status))}} />{a.label || "Untitled call-off"}<small>{typeLabel(a.type)} · {a.source==="symbol"?"symbol":a.manual ? "manual" : "auto"}</small></button>)}
         </div>
         {!!dismissedCount && <button disabled={busy} onClick={restoreDismissed}>Restore dismissed candidates ({dismissedCount})</button>}
+        </SidebarSection>
         {sel ? (
-          <section className="calloffPane" aria-label="Selected call-off">
-            <div className="calloffPaneHeader"><strong>{sel.source==="symbol"?"Graphical candidate":sel.manual ? "Manual call-off" : "Extracted candidate"}</strong><button type="button" onClick={() => selectAsset(null)} aria-label="Close call-off editor">Done ×</button></div>
+          <SidebarSection className="selectedAssetSection" title={`Review · ${sel.label||"Untitled call-off"}`} open={sections.editor} onToggle={()=>toggleSection("editor")}
+            action={<button type="button" onClick={() => selectAsset(null)} aria-label="Close call-off editor">Done ×</button>}>
             <div className="calloffEditorScroll">
           <fieldset className="calloffEditor" disabled={busy}>
             <legend className="srOnly">Call-off details</legend>
+            <span className="note">{sel.source==="symbol"?"Graphical candidate":sel.manual?"Manual call-off":"Extracted candidate"}</span>
+            <SidebarSection title="Asset classification" open={sections.classification} onToggle={()=>toggleSection("classification")}>
             {sel.source==="symbol"&&<p className="note">Graphical match{sel.symbolRef?" · "+sel.symbolRef:""}{Number.isFinite(sel.similarity)?" · shape score "+Math.round(sel.similarity*100)+"%":""}. This score is not a probability. Verify the equipment, name and status.</p>}
             <label className="field">Asset reference / name<input value={sel.label} placeholder="e.g. whistle board WB01" onChange={e => update(sel.id,{label:e.target.value})} /></label>
             <label className="field">Discipline<select value={sel.discipline} onChange={e => changeDiscipline(e.target.value)}>{DISCIPLINES.map(d => <option key={d}>{d}</option>)}</select></label>
             <label className="field">Asset type<select value={sel.type} onChange={e => update(sel.id,{type:e.target.value})}>{[...new Set(["unclassified", ...TYPES[sel.discipline], sel.type])].map(t => <option key={t} value={t}>{typeLabel(t)}</option>)}</select></label>
             <label className="field">Asset status<select value={safeStatus(sel.status)} onChange={e => { const status=e.target.value; update(sel.id,{status}); setHidden(h => h.filter(s => s !== status)); }}>{STATUS_ORDER.map(s => <option key={s} value={s}>{STATUS_COLOURS[s].label}</option>)}</select></label>
+            </SidebarSection>
             <p className="note calloffDragHelp">Drag the circle on the drawing. For fine adjustment, focus the circle and use the arrow keys (Shift for larger steps).</p>
             <div className="chips"><button type="button" onClick={removeSelected}>{sel.manual ? "Delete call-off" : "Dismiss candidate"}</button></div>
+            <SidebarSection title="Owner and notes" open={sections.notes} onToggle={()=>toggleSection("notes")}>
             <label className="field">Owner<input value={sel.owner || ""} onChange={e => update(sel.id,{owner:e.target.value})} /></label>
             <label className="field">Notes, decisions, minutes<textarea rows={4} value={sel.notes || ""} onChange={e => update(sel.id,{notes:e.target.value})} /></label>
+            </SidebarSection>
+            <SidebarSection title={`Linked documents (${(sel.links||[]).length})`} open={sections.links} onToggle={()=>toggleSection("links")}>
             <div className="field">Links to drawings and documents
               {(sel.links || []).map((l,i) => <div className="linkrow" key={i}><a href={l.url} target="_blank" rel="noopener noreferrer">{l.title}</a><button type="button" onClick={() => update(sel.id,{links:sel.links.filter((_,j)=>j!==i)})}>✕</button></div>)}
               <input placeholder="Document title" value={linkTitle} onChange={e => setLinkTitle(e.target.value)} /><input placeholder="https://…" value={linkUrl} onChange={e => setLinkUrl(e.target.value)} /><button type="button" onClick={addLink}>Add link</button>
             </div>
+            </SidebarSection>
           </fieldset>
             </div>
-          </section>
+          </SidebarSection>
         ) : fileName && <p className="note">Select a circle or choose Add call-off to place one. Drag circles directly to reposition them.</p>}
-        {fileName && <div className="chips" style={{marginTop:"auto"}}><button disabled={busy} onClick={exportJson}>Export JSON</button><label><button disabled={busy} onClick={e => e.currentTarget.nextSibling.click()}>Import JSON</button><input type="file" accept="application/json" onChange={importJson} hidden disabled={busy} /></label></div>}
+        {fileName && !context?.shared && <div className="chips" style={{marginTop:"auto"}}><button disabled={busy} onClick={exportJson}>Export JSON</button><label><button disabled={busy} onClick={e => e.currentTarget.nextSibling.click()}>Import JSON</button><input type="file" accept="application/json" onChange={importJson} hidden disabled={busy} /></label></div>}
       </aside>
       {symbolOpen&&<SymbolFinder targetCanvas={host.current?.querySelector("canvas")} region={regionBounds||undefined} onClose={()=>setSymbolOpen(false)} onMatches={receiveSymbols}/>}
     </div>
