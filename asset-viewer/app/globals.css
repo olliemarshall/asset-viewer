@@ -273,3 +273,46 @@ button.swRecordTitle { font-size:19px; font-weight:700; text-align:left; backgro
 .swMain .drawingRegister { border:0; margin:0; padding:0; }
 .swMain .drawingRegister .swFormPanel { margin-top:20px; }
 @media(max-width:850px){ .swLayout{grid-template-columns:1fr;} .swNav{border-right:0;border-bottom:1px solid var(--line);padding:14px;} .swNavFoot{margin:0;padding-top:8px;} .swMain{padding:20px 16px;} .swHeading{flex-direction:column;} .swStats{gap:7px;} .swStats>div{padding:11px;} .swStats strong{font-size:19px;} }
+
+/* SchemeWorks drawing folders */
+.folderToolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin:18px 0 12px; }
+.folderTrail { display:flex; gap:6px; flex-wrap:wrap; align-items:center; color:var(--muted); font-size:13px; }
+.folderTrail button { background:transparent; border:0; padding:3px 5px; color:var(--accent); }
+.drawingSearch { max-width:440px; margin:0 0 16px; }
+.folderGrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,230px),1fr)); gap:12px; }
+.folderGrid:empty { display:none; }
+button.folderTile { display:flex; align-items:center; gap:12px; min-width:0; text-align:left; padding:14px; border-radius:8px; }
+.folderTile > span:nth-child(2) { flex:1; min-width:0; font-weight:650; overflow-wrap:anywhere; }
+.folderTile small { display:block; color:var(--muted); font-size:11px; font-weight:400; margin-top:5px; }
+.folderGlyph { color:var(--accent); font-size:24px; }
+.folderMove { display:flex; flex-wrap:wrap; align-items:flex-end; gap:8px; margin-top:8px; }
+.folderMove .field { min-width:180px; flex:1; }
+
+/* Cleaner viewer: single toolbar, compact sidebar, more drawing area */
+.swViewer { grid-template-columns:minmax(0,1fr) 350px; grid-template-rows:auto minmax(0,1fr); min-height:0; }
+.swViewer.sidebarClosed { grid-template-columns:minmax(0,1fr); }
+.swViewer .side[hidden] { display:none; }
+.swViewerToolbar { gap:7px; padding:9px 12px; font-size:12px; align-items:center; }
+.swViewerToolbar h1 { font-size:14px; font-weight:650; margin-right:9px; }
+.swViewerToolbar button { padding:6px 9px; }
+.viewerSettings { display:flex; gap:8px; align-items:center; flex-wrap:wrap; padding:5px 8px; border:1px solid var(--line); border-radius:6px; }
+.viewerSettings .note { display:flex; gap:5px; align-items:center; }
+.viewerSaveGroup { display:flex; align-items:center; gap:9px; border-left:1px solid var(--line); padding-left:10px; }
+.viewerSaveError { flex-basis:100%; padding:6px; }
+.swViewer .viewer { min-width:0; min-height:0; padding:16px; background:var(--bg); }
+.swViewer .side { min-height:0; gap:9px; padding:12px; scrollbar-width:thin; }
+.viewerSidebarTitle { display:flex; align-items:center; gap:10px; padding:3px 0 8px; border-bottom:1px solid var(--line); }
+.viewerSidebarTitle h2 { font-size:17px; }
+.viewerSidebarTitle h2 span { color:var(--muted); font-size:12px; margin-left:4px; }
+.viewerSidebarTitle p { margin:4px 0 0; }
+.assetSearch { font-size:12px; padding:7px; }
+.swViewer .sidebarSectionToggle { font-size:13px; }
+.swViewer .sidebarSectionBody > .list { max-height:280px; scrollbar-width:thin; }
+.swViewer.hasSelection .sidebarSectionBody > .list { max-height:160px; }
+.swViewer .selectedAssetSection { border-color:var(--accent); }
+.swViewer .marker { width:23px; height:23px; margin:-11.5px 0 0 -11.5px; border-width:2px; background:rgba(255,255,255,.12); }
+.swViewer .marker.sel { box-shadow:0 0 0 3px rgba(255,200,0,.7); }
+.swViewer .marker.symbolCandidate { width:29px; height:29px; margin:-14.5px 0 0 -14.5px; border:2px dashed #d59200; background:#ffd24d33; }
+.sharedDrawingBanner { font-size:12px; padding:7px 12px; }
+@media(prefers-color-scheme:light){ .swViewerToolbar button.swPrimary { color:#fff; } }
+@media(max-width:850px){ .swViewer { grid-template-columns:1fr; grid-template-rows:auto minmax(230px,1fr) minmax(0,auto); } .swViewer .side { max-height:45vh; } .swViewer.sidebarClosed { grid-template-rows:auto minmax(230px,1fr); } .viewerSaveGroup { border:0; padding-left:0; } }
