@@ -6,7 +6,7 @@ export default function ProjectsPage() {
     <main className="workspaceShell">
       <header className="workspaceTopbar">
         <Link className="workspaceBrand" href="/projects">Engineering Workspace</Link>
-        <span className="workspaceTopbarNote">Project portfolio · Prototype</span>
+        <Link className="primaryWorkspaceLink" href="/workspace">Shared workspace →</Link>
       </header>
 
       <section className="workspaceContent">

@@ -184,3 +184,16 @@ h2 { font-size:14px; margin:0; }
 .symbolNotice p { margin:0 0 8px; }
 .stage .marker.symbolCandidate { width:32px; height:32px; margin:-16px 0 0 -16px; border:3px dashed #d59200; background:#ffd24d44; z-index:6; cursor:copy; }
 @media(max-width:800px){ .symbolLayout { grid-template-columns:1fr; } .symbolReferenceScroll { height:40vh; } }
+
+/* Shared portfolio foundation */
+.sharedHeaderActions { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.sharedHeaderActions a { color:var(--accent); font-size:12px; text-decoration:none; }
+.sharedAuth { max-width:460px; }
+.schemeForm button.sharedSecondary { background:var(--panel); color:var(--text); border:1px solid var(--line); }
+.sharedToolbar { display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end; margin-bottom:18px; }
+.sharedToolbar .field { min-width:220px; }
+.sharedCheck { display:flex; gap:6px; align-items:center; font-size:12px; }
+.sharedCheck input { width:auto; }
+.sharedInlineForm { display:flex; align-items:flex-end; gap:10px; margin-top:14px; flex-wrap:wrap; }
+.sharedInlineForm .field { flex:1; min-width:200px; }
+.sharedSection { margin-top:30px; }
