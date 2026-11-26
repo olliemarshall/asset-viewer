@@ -8,7 +8,8 @@ export function generateStaticParams() {
   ));
 }
 
-export default function DrawingPage({ params }) {
+export default async function DrawingPage({ params: routeParams }) {
+  const params = await routeParams;
   const project = demoProjects.find(item => item.id === params.projectId);
   const scheme = project?.schemes.find(item => item.id === params.schemeId);
   const drawing = scheme?.drawings.find(item => item.id === params.drawingId);
