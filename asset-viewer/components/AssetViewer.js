@@ -59,6 +59,8 @@ export default function AssetViewer({ context = null }) {
   const lastBuffer = useRef(null);
   const activeLoad = useRef(false);
   const dragRef = useRef(null);
+  const panRef = useRef(null);
+  const [panning, setPanning] = useState(false);
   const [dragPreview, setDragPreview] = useState(null);
   const [fileName, setFileName] = useState("");
   const [hash, setHash] = useState("");
@@ -99,7 +101,7 @@ export default function AssetViewer({ context = null }) {
 
   async function load(buffer, name, reextracting = false) {
     if (activeLoad.current) return;
-    activeLoad.current = true; dragRef.current = null; setDragPreview(null); setBusy(true); setError(""); setMode("select"); setSelected(null);
+    activeLoad.current = true; dragRef.current = null; panRef.current = null; setPanning(false); setDragPreview(null); setBusy(true); setError(""); setMode("select"); setSelected(null);
     try {
       const digest = reextracting ? hash : await fingerprint(buffer);
       const res = await extractFromPdf(buffer.slice(0), { restrictToDrawing: restrict, regionMode });
@@ -155,7 +157,7 @@ export default function AssetViewer({ context = null }) {
   }
   function planClick(e) {
     if (busy || !fileName) return;
-    if (mode === "select") { selectAsset(null); return; }
+    if (mode === "select") return;
     const rect = host.current?.getBoundingClientRect();
     if (!rect || !rect.width || !rect.height) return;
     const point = { x:(e.clientX-rect.left)/rect.width, y:(e.clientY-rect.top)/rect.height };
@@ -166,6 +168,34 @@ export default function AssetViewer({ context = null }) {
       setRecords(r => ({ ...r, manual: { ...r.manual, [id]: a } }));
       reveal(a); selectAsset(id);
     }
+  }
+  // A background drag scrolls the viewer. Marker drags stop propagation.
+  function startPan(e) {
+    if (busy || !fileName || mode !== "select" || e.button !== 0 || !e.isPrimary ||
+        dragRef.current || e.target.closest("button,input,select,textarea,a")) return;
+    const v = e.currentTarget;
+    // Leave the native scrollbar alone.
+    const bounds = v.getBoundingClientRect();
+    if (e.clientX >= bounds.left + v.clientWidth || e.clientY >= bounds.top + v.clientHeight) return;
+    panRef.current = { id:e.pointerId, x:e.clientX, y:e.clientY, left:v.scrollLeft, top:v.scrollTop, moved:false };
+    v.setPointerCapture(e.pointerId);
+  }
+  function movePan(e) {
+    const p = panRef.current;
+    if (!p || p.id !== e.pointerId) return;
+    const dx = e.clientX - p.x, dy = e.clientY - p.y;
+    if (!p.moved && Math.hypot(dx,dy) < 4) return;
+    p.moved = true;
+    setPanning(true);
+    e.currentTarget.scrollLeft = p.left - dx;
+    e.currentTarget.scrollTop = p.top - dy;
+  }
+  function finishPan(e) {
+    const p = panRef.current;
+    if (!p || p.id !== e.pointerId) return;
+    panRef.current = null;
+    setPanning(false);
+    if (!p.moved && e.type === "pointerup") selectAsset(null);
   }
   // Pointer capture keeps dragging active even outside the circle. Keep the
   // live preview separate from persisted records; commit only on release.
@@ -299,7 +329,7 @@ export default function AssetViewer({ context = null }) {
           <input type="file" accept="application/pdf" onChange={onFile} hidden disabled={busy} /></label>
         <label className="note"><input type="checkbox" checked={restrict} onChange={e => setRestrict(e.target.checked)} style={{width:"auto"}} /> ignore title block &amp; notes</label>
         {restrict && <label className="note">Layout <select style={{width:"auto"}} value={regionMode} onChange={e => setRegionMode(e.target.value)}>
-          <option value="auto">Auto detect</option><option value="standard">Standard</option><option value="wide">Wide plan (left 60%)</option>
+          <option value="auto">Auto detect</option><option value="standard">Standard</option><option value="wide">Wide plan (left 60%)</option><option value="strip">Long strip plan</option>
         </select></label>}
         {fileName && <>
           <button onClick={reextract} disabled={busy}>Re-extract</button>
@@ -307,10 +337,10 @@ export default function AssetViewer({ context = null }) {
           {mode !== "select" && <button onClick={() => setMode("select")}>Cancel (Esc)</button>}
         </>}
         <span style={{flex:1}} />
-        <button onClick={() => setZoom(z => Math.max(50,z-25))}>−</button><span className="note">{zoom}%</span><button onClick={() => setZoom(z => Math.min(300,z+25))}>+</button>
+        <button onClick={() => setZoom(z => Math.max(50,z-25))}>−</button><span className="note">{zoom}%</span><button onClick={() => setZoom(z => Math.min(1200,z+25))}>+</button>
         <span className="note">PDF and call-offs stay in this browser.</span>
       </div>
-      <div className="viewer">
+      <div className={"viewer" + (fileName && mode === "select" ? " panReady" : "") + (panning ? " panning" : "")} onPointerDown={startPan} onPointerMove={movePan} onPointerUp={finishPan} onPointerCancel={finishPan} onLostPointerCapture={finishPan}>
         {!fileName && !busy && <p className="note">Open a PDF drawing you are permitted to use. You can add call-offs even when no automatic assets are detected.</p>}
         {busy && <p className="note">Reading plan…</p>}
         {mode === "add" && <div className="calloffHint" role="status">Click the drawing to place a new call-off circle.</div>}
