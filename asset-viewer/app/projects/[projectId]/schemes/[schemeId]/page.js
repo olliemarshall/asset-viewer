@@ -8,7 +8,8 @@ export function generateStaticParams() {
   );
 }
 
-export default function SchemePage({ params }) {
+export default async function SchemePage({ params: routeParams }) {
+  const params = await routeParams;
   const project = demoProjects.find(item => item.id === params.projectId);
   const scheme = project?.schemes.find(item => item.id === params.schemeId);
   if (!scheme) notFound();
