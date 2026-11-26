@@ -79,3 +79,37 @@ h2 { font-size:14px; margin:0; }
   .workspaceHeadingRow,.schemeCard { align-items:flex-start; flex-direction:column; }
   .workspaceColumns { grid-template-columns:1fr; }
 }
+
+/* Scheme workspace */
+.schemeWorkspace .workspaceHeadingRow { margin-bottom:24px; }
+.schemeTabs { display:flex; flex-wrap:wrap; gap:6px; border-bottom:1px solid var(--line); margin-bottom:24px; padding-bottom:10px; }
+.schemeTab { border-color:transparent; background:transparent; color:var(--muted); font-size:13px; padding:9px 12px; }
+.schemeTab.active { background:var(--panel); color:var(--accent); border-color:var(--line); font-weight:650; }
+.schemeMetrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
+.schemeMetric { text-align:left; padding:18px; display:flex; flex-direction:column; gap:8px; border-radius:10px; }
+.schemeMetric strong { font-size:28px; letter-spacing:-.04em; }
+.schemeMetric span { font-size:12px; color:var(--muted); }
+.schemeFacts { display:grid; grid-template-columns:auto 1fr; gap:10px 20px; font-size:13px; margin:0; }
+.schemeFacts dt { color:var(--muted); }
+.schemeFacts dd { margin:0; }
+.schemeRecordList { display:grid; gap:10px; }
+.schemeRecord { display:flex; align-items:flex-start; justify-content:space-between; gap:18px; padding:15px; border:1px solid var(--line); background:var(--panel); border-radius:10px; }
+.schemeRecord > div:first-child { min-width:0; overflow-wrap:anywhere; }
+.schemeRecord h3 { font-size:15px; margin:5px 0; }
+.schemeRecord a,.viewerBack { color:var(--accent); text-decoration:none; }
+.schemeRecord p { color:var(--muted); font-size:13px; margin:6px 0 0; line-height:1.55; }
+.schemeRecordBody { white-space:pre-wrap; }
+.schemeRecordType { color:var(--muted); font-size:11px; }
+.schemeRecordButtons { display:flex; gap:6px; flex-wrap:wrap; }
+.schemeRecord button { font-size:12px; }
+.schemeEmpty { color:var(--muted); border:1px dashed var(--line); border-radius:10px; padding:20px; font-size:13px; margin:0; }
+.schemeForm { display:grid; gap:12px; padding:18px; background:var(--panel); border:1px solid var(--line); border-radius:10px; margin-top:18px; max-width:640px; }
+.schemeForm label { display:grid; gap:6px; color:var(--muted); font-size:12px; }
+.schemeForm button { justify-self:start; background:var(--accent); color:white; border:0; padding:8px 14px; }
+.schemeForm button:disabled { opacity:.5; cursor:not-allowed; }
+.viewerBack { font-size:12px; font-weight:650; }
+@media (max-width:650px) {
+  .schemeMetrics { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .schemeRecord { flex-wrap:wrap; }
+  .schemeTab { font-size:12px; padding:7px 8px; }
+}

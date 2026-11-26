@@ -45,12 +45,12 @@ export default async function ProjectWorkspacePage({ params }) {
                   <div className="schemeMeta">
                     <span>{scheme.reference}</span>
                     <span>{scheme.location}</span>
-                    <span>{scheme.drawing}</span>
+                    <span>{scheme.drawings.length} drawing{scheme.drawings.length === 1 ? "" : "s"}</span>
                   </div>
                 </div>
               </div>
-              <Link className="primaryWorkspaceLink" href="/">
-                Open asset viewer <span aria-hidden="true">→</span>
+              <Link className="primaryWorkspaceLink" href={`/projects/${project.id}/schemes/${scheme.id}`}>
+                Open scheme workspace <span aria-hidden="true">→</span>
               </Link>
             </article>
           ))}
@@ -59,7 +59,7 @@ export default async function ProjectWorkspacePage({ params }) {
         <div className="workspaceColumns">
           <section className="workspaceInfoCard">
             <h2>Project structure</h2>
-            <p>This project is the container for its schemes. Each scheme will hold its drawings, asset register, disciplines, documents, discussions and actions.</p>
+            <p>This project is the container for its schemes. Each scheme has a workspace for drawings, asset viewing, document links, discussions and actions.</p>
           </section>
           <section className="workspaceInfoCard">
             <h2>Coming next</h2>
@@ -67,7 +67,7 @@ export default async function ProjectWorkspacePage({ params }) {
               <li>Scheme creation and editing</li>
               <li>Discipline registers and filters</li>
               <li>Shared document library</li>
-              <li>Actions, discussions and decisions</li>
+              <li>Shared records and audit history</li>
               <li>Team membership and permissions</li>
             </ul>
           </section>
@@ -75,7 +75,7 @@ export default async function ProjectWorkspacePage({ params }) {
 
         <div className="workspaceNotice">
           <strong>Prototype boundary</strong>
-          <p>The scheme currently opens the existing PDF asset viewer. Project and scheme records are example data in code, not yet stored in a shared database.</p>
+          <p>Open a scheme to manage its drawings and supporting information. Project and scheme records are example data in code, not yet stored in a shared database.</p>
         </div>
       </section>
     </main>
