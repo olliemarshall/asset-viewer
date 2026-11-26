@@ -5,7 +5,7 @@ export default function ProjectsPage() {
   return (
     <main className="workspaceShell">
       <header className="workspaceTopbar">
-        <Link className="workspaceBrand" href="/projects">Engineering Workspace</Link>
+        <Link className="workspaceBrand" href="/projects">SchemeWorks</Link>
         <Link className="primaryWorkspaceLink" href="/workspace">Shared workspace →</Link>
       </header>
 
