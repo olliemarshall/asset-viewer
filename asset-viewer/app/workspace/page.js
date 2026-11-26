@@ -14,7 +14,7 @@ try {
 
 function Header({user,onSignOut}) {
   return <header className="workspaceTopbar">
-    <Link className="workspaceBrand" href="/workspace">Engineering Workspace</Link>
+    <Link className="workspaceBrand" href="/workspace"><span className="swMark" aria-hidden="true">S</span><span>Scheme<span className="swBrandAccent">Works</span></span></Link>
     <div className="sharedHeaderActions"><Link href="/projects">Local prototype</Link>{user&&<><span className="note">{user.email}</span><button onClick={onSignOut}>Sign out</button></>}</div>
   </header>;
 }
@@ -99,6 +99,8 @@ function Portfolio({user}){
   const [loading,setLoading]=useState(true);
   const [showArchived,setShowArchived]=useState(false);
   const [revision,setRevision]=useState(0);
+  const [form,setForm]=useState(null);
+  const [search,setSearch]=useState("");
   const org=orgs.find(o=>o.id===orgId);
   const project=projects.find(p=>p.id===projectId&&p.organisation_id===orgId);
   const scheme=schemes.find(s=>s.id===schemeId&&s.project_id===project?.id);
@@ -131,55 +133,92 @@ function Portfolio({user}){
     catch(e){setError(e.message);}
     finally{setBusy(false);}
   }
-  function createOrg(e){e.preventDefault();write(()=>db.rpc("create_workspace_organisation",{org_name:orgName.trim()}),id=>{setOrgName("");setOrgId(id);setProjectId("");});}
+  function createOrg(e){e.preventDefault();write(()=>db.rpc("create_workspace_organisation",{org_name:orgName.trim()}),id=>{setOrgName("");setOrgId(id);setProjectId("");setSchemeId("");setForm(null);});}
   function saveProject(e){
     e.preventDefault();const values={name:projectDraft.name.trim(),reference:projectDraft.reference.trim(),description:projectDraft.description.trim()};
     write(()=>editingProject
       ?db.from("projects").update(values).eq("id",editingProject).select("id").single()
-      :db.from("projects").insert({...values,organisation_id:orgId}).select("id").single(),data=>{setProjectDraft(emptyProject);setEditingProject(null);setProjectId(data.id);});
+      :db.from("projects").insert({...values,organisation_id:orgId}).select("id").single(),data=>{setProjectDraft(emptyProject);setEditingProject(null);setProjectId(data.id);setSchemeId("");setForm(null);setSearch("");});
   }
   function saveScheme(e){
     e.preventDefault();const values={name:schemeDraft.name.trim(),reference:schemeDraft.reference.trim(),location:schemeDraft.location.trim(),description:schemeDraft.description.trim()};
     write(()=>editingScheme
       ?db.from("schemes").update(values).eq("id",editingScheme).select("id").single()
-      :db.from("schemes").insert({...values,project_id:project.id}).select("id").single(),()=>{setSchemeDraft(emptyScheme);setEditingScheme(null);});
+      :db.from("schemes").insert({...values,project_id:project.id}).select("id").single(),()=>{setSchemeDraft(emptyScheme);setEditingScheme(null);setForm(null);});
   }
   function toggleStatus(table,item){
     const status=item.status==="active"?"archived":"active";
     if(!window.confirm((status==="archived"?"Archive ":"Restore ")+item.name+"?"))return;
     write(()=>db.from(table).update({status}).eq("id",item.id).select("id").single());
   }
-  function chooseOrg(id){setOrgId(id);setProjectId("");setSchemeId("");setEditingProject(null);setProjectDraft(emptyProject);setEditingScheme(null);setSchemeDraft(emptyScheme);}
-  function chooseProject(id){setProjectId(id);setSchemeId("");setEditingScheme(null);setSchemeDraft(emptyScheme);}
-  const filtered=projects.filter(p=>p.organisation_id===orgId&&(showArchived||p.status==="active"));
-  const filteredSchemes=schemes.filter(s=>s.project_id===project?.id&&(showArchived||s.status==="active"));
-  return <section className="workspaceContent">
-    <div className="workspaceEyebrow">SHARED WORKSPACE</div>
-    <div className="workspaceHeadingRow"><div><h1 className="workspaceTitle">Projects</h1><p className="workspaceLead">Authenticated organisation and scheme records in Supabase.</p></div><span className="workspacePill">Development</span></div>
-    {error&&<div className="workspaceNotice error" role="alert"><strong>Could not complete request</strong><p>{error}</p><p>Ensure the workspace migration has been applied to the correct development database.</p></div>}
-    {loading?<p>Loading shared records…</p>:<>
-      <div className="sharedToolbar"><label className="field">Organisation<select value={orgId} onChange={e=>chooseOrg(e.target.value)} disabled={busy}><option value="">Select organisation</option>{orgs.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}</select></label>
-      <label className="sharedCheck"><input type="checkbox" checked={showArchived} onChange={e=>setShowArchived(e.target.checked)}/>Show archived</label>
-      <button disabled={busy} onClick={()=>setRevision(n=>n+1)}>Refresh</button></div>
-      <details className="workspaceInfoCard" open={!orgs.length}>
-        <summary>Create organisation</summary>
-        <form className="sharedInlineForm" onSubmit={createOrg}><label className="field">Organisation name<input required maxLength={200} value={orgName} onChange={e=>setOrgName(e.target.value)}/></label><button disabled={busy}>Create</button></form>
-      </details>
-      {org&&<>
-        <div className="workspaceSectionHeading sharedSection"><h2>{org.name} — projects</h2><span>{admin?"Organisation administrator":"Organisation member"}</span></div>
-        {!filtered.length&&<p className="schemeEmpty">No accessible projects yet.</p>}
-        <div className="schemeList">{filtered.map(p=><article className="schemeCard" key={p.id}><div><h3>{p.name}</h3><p>{p.reference} · {p.status}</p><p>{p.description}</p></div><div className="chips"><button disabled={busy} onClick={()=>chooseProject(p.id)}>Open</button>{admin&&<><button disabled={busy} onClick={()=>{setEditingProject(p.id);setProjectDraft({name:p.name,reference:p.reference,description:p.description});}}>Edit</button><button disabled={busy} onClick={()=>toggleStatus("projects",p)}>{p.status==="active"?"Archive":"Restore"}</button></>}</div></article>)}</div>
-        {admin&&<form className="schemeForm" onSubmit={saveProject}><h2>{editingProject?"Edit project":"Create project"}</h2><label>Name<input required maxLength={200} value={projectDraft.name} onChange={e=>setProjectDraft(d=>({...d,name:e.target.value}))}/></label><label>Reference<input required maxLength={100} value={projectDraft.reference} onChange={e=>setProjectDraft(d=>({...d,reference:e.target.value}))}/></label><label>Description<textarea maxLength={4000} value={projectDraft.description} onChange={e=>setProjectDraft(d=>({...d,description:e.target.value}))}/></label><div className="chips"><button disabled={busy}>{editingProject?"Save project":"Create project"}</button>{editingProject&&<button type="button" className="sharedSecondary" onClick={()=>{setEditingProject(null);setProjectDraft(emptyProject);}}>Cancel</button>}</div></form>}
-      </>}
-      {project&&<>
-        <div className="workspaceSectionHeading sharedSection"><h2>{project.name} — schemes</h2><button onClick={()=>chooseProject("")}>Close</button></div>
-        {project.status==="archived"&&<p className="note">This project is archived.</p>}
-        {!filteredSchemes.length&&<p className="schemeEmpty">No accessible schemes yet.</p>}
-        <div className="schemeList">{filteredSchemes.map(s=><article className="schemeCard" key={s.id}><div><h3>{s.name}</h3><p>{s.reference} · {s.location||"Location unassigned"} · {s.status}</p><p>{s.description}</p></div><div className="chips"><button disabled={busy} onClick={()=>setSchemeId(s.id)}>Open drawings</button>{canEditScheme&&project.status==="active"&&<><button disabled={busy} onClick={()=>{setEditingScheme(s.id);setSchemeDraft({name:s.name,reference:s.reference,location:s.location,description:s.description});}}>Edit</button><button disabled={busy} onClick={()=>toggleStatus("schemes",s)}>{s.status==="active"?"Archive":"Restore"}</button></>}</div></article>)}</div>
-        {canEditScheme&&project.status==="active"&&<form className="schemeForm" onSubmit={saveScheme}><h2>{editingScheme?"Edit scheme":"Create scheme"}</h2>{[["name","Name",200],["reference","Reference",100],["location","Location / ELR",200]].map(([field,label,max])=><label key={field}>{label}<input required={field!=="location"} maxLength={max} value={schemeDraft[field]} onChange={e=>setSchemeDraft(d=>({...d,[field]:e.target.value}))}/></label>)}<label>Description<textarea maxLength={4000} value={schemeDraft.description} onChange={e=>setSchemeDraft(d=>({...d,description:e.target.value}))}/></label><div className="chips"><button disabled={busy}>{editingScheme?"Save scheme":"Create scheme"}</button>{editingScheme&&<button type="button" className="sharedSecondary" onClick={()=>{setEditingScheme(null);setSchemeDraft(emptyScheme);}}>Cancel</button>}</div></form>}
-        {scheme&&<DrawingRegister key={scheme.id} db={db} user={user} scheme={scheme} project={project} canUpload={canEditScheme&&project.status==="active"&&scheme.status==="active"} onClose={()=>setSchemeId("")}/>}
-      </>}
-    </>}
-    <div className="workspaceNotice"><strong>Scope of this release</strong><p>Organisations, projects and schemes are shared database records. Private PDF revisions can be uploaded and opened by authorised members. Call-offs in the shared viewer are temporary scratch work (export JSON before closing); invitations, shared asset records and document/action/discussion registers are not yet connected. Archive is a reversible record status, not a security boundary.</p><p><Link href="/projects">Open the existing local prototype →</Link></p></div>
-  </section>;
+  function chooseOrg(id){setSearch("");setForm(null);setOrgId(id);setProjectId("");setSchemeId("");setEditingProject(null);setProjectDraft(emptyProject);setEditingScheme(null);setSchemeDraft(emptyScheme);}
+  function chooseProject(id){setSearch("");setForm(null);setProjectId(id);setSchemeId("");setEditingScheme(null);setSchemeDraft(emptyScheme);}
+  const matches=item=>[item.name,item.reference,item.description,item.location].some(v=>String(v||"").toLowerCase().includes(search.trim().toLowerCase()));
+  const orgProjects=projects.filter(p=>p.organisation_id===orgId);
+  const projectSchemes=schemes.filter(s=>s.project_id===project?.id);
+  const filtered=orgProjects.filter(p=>(showArchived||p.status==="active")&&matches(p));
+  const filteredSchemes=projectSchemes.filter(s=>(showArchived||s.status==="active")&&matches(s));
+  const chooseScheme=id=>{setSchemeId(id);setForm(null);setSearch("");};
+  const cancelForm=()=>{setForm(null);setEditingProject(null);setEditingScheme(null);setProjectDraft(emptyProject);setSchemeDraft(emptyScheme);setOrgName("");};
+  function newProject(){cancelForm();setForm("project");}
+  function newScheme(){cancelForm();setForm("scheme");}
+  function editProject(p){setEditingProject(p.id);setProjectDraft({name:p.name,reference:p.reference,description:p.description});setForm("project");}
+  function editScheme(s){setEditingScheme(s.id);setSchemeDraft({name:s.name,reference:s.reference,location:s.location,description:s.description});setForm("scheme");}
+  return <div className="swLayout">
+    <aside className="swNav" aria-label="Workspace navigation">
+      <div className="swNavLabel">WORKSPACE</div>
+      <label className="field">Organisation<select value={orgId} onChange={e=>chooseOrg(e.target.value)} disabled={busy}><option value="">Select organisation</option>{orgs.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}</select></label>
+      <button className="swNavLink" disabled={busy} onClick={()=>{chooseProject("");setForm("organisation");}}>＋ New organisation</button>
+      <div className="swNavLabel">PORTFOLIO</div>
+      <button className={"swNavLink"+(!project?" active":"")} disabled={busy} onClick={()=>chooseProject("")}>▦ All projects</button>
+      {orgProjects.filter(p=>p.status==="active"||showArchived||p.id===projectId).map(p=><button key={p.id} title={p.name} className={"swNavLink swNavProject"+(p.id===projectId?" active":"")} disabled={busy} onClick={()=>chooseProject(p.id)}><span>▰</span><span>{p.name}</span></button>)}
+      <div className="swNavFoot"><span className="note">{org?(admin?"Organisation administrator":"Organisation member"):"No organisation selected"}</span><Link href="/projects">Standalone prototype ↗</Link></div>
+    </aside>
+    <main className="swMain">
+      <nav className="swBreadcrumb" aria-label="Breadcrumb"><button disabled={busy} onClick={()=>chooseProject("")}>Projects</button>{project&&<><span>›</span><button disabled={busy} onClick={()=>chooseScheme("")}>{project.name}</button></>}{scheme&&<><span>›</span><span aria-current="page">{scheme.name}</span></>}</nav>
+      <div className="swHeading">
+        <div><div className="workspaceEyebrow">{scheme?"SCHEME WORKSPACE":project?"PROJECT WORKSPACE":"PROJECT PORTFOLIO"}</div>
+          <h1 className="workspaceTitle">{scheme?.name||project?.name||"Projects"}</h1>
+          <p className="workspaceLead">{scheme?scheme.reference+(scheme.location?" · "+scheme.location:""):project?project.reference+" · "+(project.description||"Engineering schemes"):"Manage your engineering projects, schemes and drawings."}</p>
+        </div>
+        <div className="swHeadingActions">
+          {!scheme&&project&&canEditScheme&&project.status==="active"&&<button className="swPrimary" disabled={busy} onClick={newScheme}>＋ New scheme</button>}
+          {!project&&org&&admin&&<button className="swPrimary" disabled={busy} onClick={newProject}>＋ New project</button>}
+          {!org&&<button className="swPrimary" disabled={busy} onClick={()=>setForm("organisation")}>＋ New organisation</button>}
+          <button disabled={busy||loading} onClick={()=>setRevision(n=>n+1)}>Refresh</button>
+        </div>
+      </div>
+      {error&&<div className="workspaceNotice error" role="alert"><strong>Could not complete request</strong><p>{error}</p></div>}
+      {form&&<section className="swFormPanel" aria-label="Record editor">
+        <div className="swSectionHeader"><h2>{form==="organisation"?"Create organisation":form==="project"?(editingProject?"Edit project":"Create project"):(editingScheme?"Edit scheme":"Create scheme")}</h2><button disabled={busy} onClick={cancelForm}>Cancel ×</button></div>
+        {form==="organisation"?<form className="swForm" onSubmit={createOrg}><label>Organisation name<input required maxLength={200} value={orgName} onChange={e=>setOrgName(e.target.value)}/></label><button className="swPrimary" disabled={busy}>Create organisation</button></form>:form==="project"&&admin?<form className="swForm" onSubmit={saveProject}>
+          <div className="swFormGrid"><label>Project name<input required maxLength={200} value={projectDraft.name} onChange={e=>setProjectDraft(d=>({...d,name:e.target.value}))}/></label><label>Reference<input required maxLength={100} value={projectDraft.reference} onChange={e=>setProjectDraft(d=>({...d,reference:e.target.value}))}/></label></div>
+          <label>Description<textarea maxLength={4000} rows={3} value={projectDraft.description} onChange={e=>setProjectDraft(d=>({...d,description:e.target.value}))}/></label><button className="swPrimary" disabled={busy}>{editingProject?"Save changes":"Create project"}</button>
+        </form>:form==="scheme"&&canEditScheme&&project?.status==="active"?<form className="swForm" onSubmit={saveScheme}>
+          <div className="swFormGrid">{[["name","Scheme name",200],["reference","Reference",100],["location","Location / ELR",200]].map(([field,label,max])=><label key={field}>{label}<input required={field!=="location"} maxLength={max} value={schemeDraft[field]} onChange={e=>setSchemeDraft(d=>({...d,[field]:e.target.value}))}/></label>)}</div>
+          <label>Description<textarea maxLength={4000} rows={3} value={schemeDraft.description} onChange={e=>setSchemeDraft(d=>({...d,description:e.target.value}))}/></label><button className="swPrimary" disabled={busy}>{editingScheme?"Save changes":"Create scheme"}</button>
+        </form>:<p className="note">You do not have permission to edit this record.</p>}
+      </section>}
+      {loading?<p className="swEmpty">Loading shared records…</p>:scheme?<DrawingRegister key={scheme.id} db={db} user={user} scheme={scheme} project={project} canUpload={canEditScheme&&project.status==="active"&&scheme.status==="active"} onClose={()=>chooseScheme("")}/>:org?<>
+        <div className="swStats">
+          <div><span>{project?"Active schemes":"Active projects"}</span><strong>{(project?projectSchemes:orgProjects).filter(x=>x.status==="active").length}</strong></div>
+          <div><span>{project?"Archived schemes":"Archived projects"}</span><strong>{(project?projectSchemes:orgProjects).filter(x=>x.status==="archived").length}</strong></div>
+          <div><span>{project?"Project access":"Accessible schemes"}</span><strong>{project?(canEditScheme?"Editor":"Viewer"):schemes.filter(s=>orgProjects.some(p=>p.id===s.project_id)).length}</strong></div>
+        </div>
+        <div className="swSectionHeader swListHeading"><h2>{project?"Schemes":"Project workspaces"}</h2><span className="note">{(project?filteredSchemes:filtered).length} shown</span></div>
+        <div className="swSearchRow"><input aria-label={project?"Search schemes":"Search projects"} placeholder={project?"Search schemes…":"Search projects…"} value={search} onChange={e=>setSearch(e.target.value)}/><label className="sharedCheck"><input type="checkbox" checked={showArchived} onChange={e=>setShowArchived(e.target.checked)}/>Show archived</label></div>
+        {!(project?filteredSchemes:filtered).length&&<div className="swEmpty">{search?"No matching records.":project?"No accessible schemes yet.":"No accessible projects yet."}</div>}
+        <div className="swCardGrid">{(project?filteredSchemes:filtered).map(item=><article className="swRecordCard" key={item.id}>
+          <div className="swRecordTop"><span className="swRecordIcon" aria-hidden="true">{project?"▤":"▦"}</span><span className={"swStatus "+item.status}>{item.status==="active"?"Active":"Archived"}</span></div>
+          <button type="button" className="swRecordTitle" disabled={busy} onClick={()=>project?chooseScheme(item.id):chooseProject(item.id)}>{item.name}</button>
+          <span className="swReference">{item.reference}{project&&item.location?" · "+item.location:""}</span>
+          <p>{item.description||"No description provided."}</p>
+          {!project&&<span className="note">{schemes.filter(s=>s.project_id===item.id&&s.status==="active").length} active schemes</span>}
+          <div className="swRecordActions"><button className="swOpen" disabled={busy} onClick={()=>project?chooseScheme(item.id):chooseProject(item.id)}>{project?"Open scheme":"Open project"} →</button>
+          {(project?canEditScheme&&project.status==="active":admin)&&<><button disabled={busy} onClick={()=>project?editScheme(item):editProject(item)}>Edit</button><button disabled={busy} onClick={()=>toggleStatus(project?"schemes":"projects",item)}>{item.status==="active"?"Archive":"Restore"}</button></>}</div>
+        </article>)}</div>
+      </>:<div className="swEmpty"><h2>Start with an organisation</h2><p>Create an organisation to manage engineering projects and schemes.</p></div>}
+      <footer className="swFooter">SchemeWorks · Development preview · Use approved test data only. Shared asset persistence is not yet implemented.</footer>
+    </main>
+  </div>;
 }
