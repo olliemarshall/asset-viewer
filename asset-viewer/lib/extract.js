@@ -55,7 +55,7 @@ export async function extractFromPdf(data, { restrictToDrawing = true } = {}) {
   const pdfjs = await import("pdfjs-dist/build/pdf");
   pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.js";
 
-  const pdf = await pdfjs.getDocument({ data }).promise;
+  const pdf = await pdfjs.getDocument({ data, isEvalSupported: false }).promise;
   const page = await pdf.getPage(1);
   const viewport = page.getViewport({ scale: 2 });
 
