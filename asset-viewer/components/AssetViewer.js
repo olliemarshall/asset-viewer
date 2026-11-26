@@ -1,12 +1,13 @@
 "use client";
 import Link from "next/link";
+import SymbolFinder from "./SymbolFinder";
 import { useEffect, useRef, useState } from "react";
 import { extractFromPdf, STATUS_COLOURS, STATUS_ORDER } from "../lib/extract";
 
 const DISCIPLINES = ["Unassigned", "Signalling", "Track", "E&P", "Civils", "Telecoms", "Other"];
 const TYPES = {
   Unassigned: ["unclassified"],
-  Signalling: ["signal", "points", "track_circuit", "location_case", "wheel_sensor", "track_equipment", "whistle_board", "speed_board", "level_crossing_equipment", "treadle", "axle_counter", "sawd_detector", "sawd_annunciator", "cable", "other"],
+  Signalling: ["signal", "points", "track_circuit", "location_case", "wheel_sensor", "track_equipment", "whistle_board", "speed_board", "level_crossing_equipment", "treadle", "axle_counter", "sawd_detector", "sawd_annunciator", "aws", "tpws", "notice_board", "pole", "telephone", "cable", "other"],
   Track: ["rail", "sleeper", "points", "crossing", "buffer_stop", "track_equipment", "other"],
   "E&P": ["pole", "overhead_line_equipment", "power_supply", "cable", "distribution_equipment", "other"],
   Civils: ["foundation", "fence", "structure", "drainage", "access", "other"],
@@ -35,6 +36,9 @@ function cleanPatch(p) {
   if (Array.isArray(p.links)) out.links = safeLinks(p.links);
   if (validPoint(p)) { out.x = p.x; out.y = p.y; }
   if (p.dismissed === true) out.dismissed = true;
+  if (p.source === "symbol") out.source = "symbol";
+  if (typeof p.symbolRef === "string") out.symbolRef = p.symbolRef;
+  if (Number.isFinite(p.similarity) && p.similarity >= 0 && p.similarity <= 1) out.similarity = p.similarity;
   return out;
 }
 function cleanRecords(raw) {
@@ -74,6 +78,10 @@ export default function AssetViewer({ context = null }) {
   const [restrict, setRestrict] = useState(true);
   const [regionMode, setRegionMode] = useState("auto");
   const [region, setRegion] = useState("");
+  const [regionBounds,setRegionBounds]=useState(null);
+  const [symbolOpen,setSymbolOpen]=useState(false);
+  const [symbolMatches,setSymbolMatches]=useState([]);
+  const [symbolNotice,setSymbolNotice]=useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [storageError, setStorageError] = useState("");
@@ -101,7 +109,7 @@ export default function AssetViewer({ context = null }) {
 
   async function load(buffer, name, reextracting = false) {
     if (activeLoad.current) return;
-    activeLoad.current = true; dragRef.current = null; panRef.current = null; setPanning(false); setDragPreview(null); setBusy(true); setError(""); setMode("select"); setSelected(null);
+    activeLoad.current = true; setSymbolMatches([]);setSymbolNotice("");setSymbolOpen(false);dragRef.current = null; panRef.current = null; setPanning(false); setDragPreview(null); setBusy(true); setError(""); setMode("select"); setSelected(null);
     try {
       const digest = reextracting ? hash : await fingerprint(buffer);
       const res = await extractFromPdf(buffer.slice(0), { restrictToDrawing: restrict, regionMode });
@@ -124,7 +132,7 @@ export default function AssetViewer({ context = null }) {
       }
       host.current.replaceChildren(res.canvas);
       lastBuffer.current = { buffer, name };
-      setExtracted(res.assets); setRegion(res.region); setFileName(name); setHash(digest); setRecords(saved);
+      setExtracted(res.assets); setRegion(res.region);setRegionBounds(res.regionBounds); setFileName(name); setHash(digest); setRecords(saved);
       setHidden([]); setDiscFilter(DISCIPLINES);
       if (!res.hasText) setError("This PDF has no searchable text. You can still add call-off circles manually.");
       else if (!res.assets.length) setError("No automatic candidates found. Use Add call-off to mark assets manually.");
@@ -264,6 +272,30 @@ export default function AssetViewer({ context = null }) {
     });
   }
 
+  function receiveSymbols(result) {
+    const matches=result.matches.map(m=>({...m,id:"suggestion:"+crypto.randomUUID(),type:result.type,symbolRef:result.ref}));
+    setSymbolMatches(matches);
+    setSymbolNotice(matches.length
+      ? matches.length+" graphical candidates"+(result.truncated?" (search capped at 150)":"")+". Click a dashed circle to add it for review."
+      : "No graphical candidates at these settings. Try a tighter crop or a different size range.");
+    setSymbolOpen(false);
+    setMode("select");
+  }
+  function acceptSymbols(matches) {
+    if(!matches.length)return;
+    const additions={};
+    for(const m of matches){
+      const id="manual:"+crypto.randomUUID();
+      additions[id]={id,manual:true,source:"symbol",label:"Unlabelled "+typeLabel(m.type),type:safeType(m.type),
+        discipline:"Signalling",status:"REVIEW",x:m.x,y:m.y,symbolRef:m.symbolRef,similarity:m.score};
+    }
+    setRecords(r=>({...r,manual:{...r.manual,...additions}}));
+    const accepted=new Set(matches.map(m=>m.id));
+    setSymbolMatches(old=>old.filter(m=>!accepted.has(m.id)));
+    reveal({status:"REVIEW",discipline:"Signalling"});
+    selectAsset(Object.keys(additions)[0]);
+    setSymbolNotice("Added "+matches.length+" graphical candidate"+(matches.length===1?"":"s")+" for engineer review.");
+  }
   function removeSelected() {
     if (!sel || !window.confirm(sel.manual ? "Delete this manual call-off?" : "Dismiss this extracted candidate? You can restore dismissed candidates.")) return;
     if (sel.manual) setRecords(r => {
@@ -333,6 +365,7 @@ export default function AssetViewer({ context = null }) {
         </select></label>}
         {fileName && <>
           <button onClick={reextract} disabled={busy}>Re-extract</button>
+          <button disabled={busy} onClick={()=>{setMode("select");setSymbolOpen(true);}}>Find symbols (beta)</button>
           <button className={mode === "add" ? "calloffActive" : ""} aria-pressed={mode === "add"} disabled={busy} onClick={() => setMode(m => m === "add" ? "select" : "add")}>＋ Add call-off</button>
           {mode !== "select" && <button onClick={() => setMode("select")}>Cancel (Esc)</button>}
         </>}
@@ -362,12 +395,19 @@ export default function AssetViewer({ context = null }) {
                 disabled={busy || mode !== "select"} />
             );
           })}
+          {mode==="select"&&symbolMatches.map(m=><button type="button" key={m.id} className="marker symbolCandidate" title={`${typeLabel(m.type)} • shape score ${Math.round(m.score*100)}% • click to add for review`}
+            aria-label={`Add suggested ${typeLabel(m.type)} for review`} style={{left:m.x*100+"%",top:m.y*100+"%"}}
+            onClick={e=>{e.stopPropagation();acceptSymbols([m]);}}/>)}
         </div>
       </div>
       <aside className={"side calloffSide" + (sel ? " hasSelection" : "")}>
         {error && <div className="error" role="alert">{error}</div>}
         {storageError && <div className="error" role="alert">{storageError}</div>}
         <h2>{assets.length} call-offs</h2>
+        {symbolNotice&&<div className="symbolNotice"><p>{symbolNotice}</p>
+          {!!symbolMatches.length&&<><p className="note">Dashed circles are temporary suggestions. Check for duplicates or non-equipment graphics.</p><div className="chips"><button onClick={()=>{if(window.confirm("Add all "+symbolMatches.length+" suggestions as unverified call-offs? Check them for duplicates and false matches."))acceptSymbols(symbolMatches);}}>Add all for review</button><button onClick={()=>{setSymbolMatches([]);setSymbolNotice("");}}>Clear suggestions</button></div></>}
+          {!symbolMatches.length&&<button onClick={()=>setSymbolNotice("")}>Dismiss</button>}
+        </div>}
         {region && <p className="note">{region} · {assets.filter(a => a.manual).length} manual · {assets.filter(a => !a.manual).length} extracted. Verify all candidate labels and statuses.</p>}
         <div className="chips">
           {STATUS_ORDER.map(s => <button key={s} className={"chip" + (hidden.includes(s) ? " off" : "")} aria-pressed={!hidden.includes(s)} onClick={() => setHidden(h => h.includes(s) ? h.filter(x => x !== s) : [...h,s])}><span className="dot" style={{background:colour(s)}} />{STATUS_COLOURS[s].label} ({counts[s]})</button>)}
@@ -377,15 +417,16 @@ export default function AssetViewer({ context = null }) {
           <div className="disciplineGrid">{DISCIPLINES.map(d => <label key={d}><input type="checkbox" checked={discFilter.includes(d)} onChange={e => setDiscFilter(old => e.target.checked ? [...new Set([...old,d])] : old.filter(x => x !== d))} />{d}</label>)}</div>
         </section>
         <div className="list" aria-label="Call-off list">
-          {[...visible].sort((a,b) => a.label.localeCompare(b.label)).map(a => <button type="button" key={a.id} className={"row" + (a.id === selected ? " sel" : "")} onClick={() => selectAsset(a.id)} disabled={busy}><span className="dot" style={{background:colour(safeStatus(a.status))}} />{a.label || "Untitled call-off"}<small>{typeLabel(a.type)} · {a.manual ? "manual" : "auto"}</small></button>)}
+          {[...visible].sort((a,b) => a.label.localeCompare(b.label)).map(a => <button type="button" key={a.id} className={"row" + (a.id === selected ? " sel" : "")} onClick={() => selectAsset(a.id)} disabled={busy}><span className="dot" style={{background:colour(safeStatus(a.status))}} />{a.label || "Untitled call-off"}<small>{typeLabel(a.type)} · {a.source==="symbol"?"symbol":a.manual ? "manual" : "auto"}</small></button>)}
         </div>
         {!!dismissedCount && <button disabled={busy} onClick={restoreDismissed}>Restore dismissed candidates ({dismissedCount})</button>}
         {sel ? (
           <section className="calloffPane" aria-label="Selected call-off">
-            <div className="calloffPaneHeader"><strong>{sel.manual ? "Manual call-off" : "Extracted candidate"}</strong><button type="button" onClick={() => selectAsset(null)} aria-label="Close call-off editor">Done ×</button></div>
+            <div className="calloffPaneHeader"><strong>{sel.source==="symbol"?"Graphical candidate":sel.manual ? "Manual call-off" : "Extracted candidate"}</strong><button type="button" onClick={() => selectAsset(null)} aria-label="Close call-off editor">Done ×</button></div>
             <div className="calloffEditorScroll">
           <fieldset className="calloffEditor" disabled={busy}>
             <legend className="srOnly">Call-off details</legend>
+            {sel.source==="symbol"&&<p className="note">Graphical match{sel.symbolRef?" · "+sel.symbolRef:""}{Number.isFinite(sel.similarity)?" · shape score "+Math.round(sel.similarity*100)+"%":""}. This score is not a probability. Verify the equipment, name and status.</p>}
             <label className="field">Asset reference / name<input value={sel.label} placeholder="e.g. whistle board WB01" onChange={e => update(sel.id,{label:e.target.value})} /></label>
             <label className="field">Discipline<select value={sel.discipline} onChange={e => changeDiscipline(e.target.value)}>{DISCIPLINES.map(d => <option key={d}>{d}</option>)}</select></label>
             <label className="field">Asset type<select value={sel.type} onChange={e => update(sel.id,{type:e.target.value})}>{[...new Set(["unclassified", ...TYPES[sel.discipline], sel.type])].map(t => <option key={t} value={t}>{typeLabel(t)}</option>)}</select></label>
@@ -404,6 +445,7 @@ export default function AssetViewer({ context = null }) {
         ) : fileName && <p className="note">Select a circle or choose Add call-off to place one. Drag circles directly to reposition them.</p>}
         {fileName && <div className="chips" style={{marginTop:"auto"}}><button disabled={busy} onClick={exportJson}>Export JSON</button><label><button disabled={busy} onClick={e => e.currentTarget.nextSibling.click()}>Import JSON</button><input type="file" accept="application/json" onChange={importJson} hidden disabled={busy} /></label></div>}
       </aside>
+      {symbolOpen&&<SymbolFinder targetCanvas={host.current?.querySelector("canvas")} region={regionBounds||undefined} onClose={()=>setSymbolOpen(false)} onMatches={receiveSymbols}/>}
     </div>
   );
 }

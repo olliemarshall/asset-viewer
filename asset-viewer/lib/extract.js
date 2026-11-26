@@ -170,5 +170,6 @@ export async function extractFromPdf(data, { restrictToDrawing = true, regionMod
   return {
     canvas, assets: [...assets.values()].map(({ rank, ...asset }) => asset),
     hasText: items.length > 0, region: restrictToDrawing ? region.name : "Whole page",
+    regionBounds: restrictToDrawing ? {left:region.left,right:region.right,top:region.top,bottom:region.bottom} : {left:0,right:1,top:0,bottom:1},
   };
 }
