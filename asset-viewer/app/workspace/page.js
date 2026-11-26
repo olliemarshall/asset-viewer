@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import DrawingRegister from "../../components/DrawingRegister";
 import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -87,6 +88,7 @@ function Portfolio({user}){
   const [schemes,setSchemes]=useState([]);
   const [orgId,setOrgId]=useState("");
   const [projectId,setProjectId]=useState("");
+  const [schemeId,setSchemeId]=useState("");
   const [orgName,setOrgName]=useState("");
   const [projectDraft,setProjectDraft]=useState(emptyProject);
   const [schemeDraft,setSchemeDraft]=useState(emptyScheme);
@@ -99,6 +101,7 @@ function Portfolio({user}){
   const [revision,setRevision]=useState(0);
   const org=orgs.find(o=>o.id===orgId);
   const project=projects.find(p=>p.id===projectId&&p.organisation_id===orgId);
+  const scheme=schemes.find(s=>s.id===schemeId&&s.project_id===project?.id);
   const admin=memberships.some(m=>m.organisation_id===orgId&&m.role==="admin");
   const canEditScheme=!!project&&(admin||projectRoles.some(m=>m.project_id===project.id&&m.role==="editor"));
 
@@ -146,8 +149,8 @@ function Portfolio({user}){
     if(!window.confirm((status==="archived"?"Archive ":"Restore ")+item.name+"?"))return;
     write(()=>db.from(table).update({status}).eq("id",item.id).select("id").single());
   }
-  function chooseOrg(id){setOrgId(id);setProjectId("");setEditingProject(null);setProjectDraft(emptyProject);setEditingScheme(null);setSchemeDraft(emptyScheme);}
-  function chooseProject(id){setProjectId(id);setEditingScheme(null);setSchemeDraft(emptyScheme);}
+  function chooseOrg(id){setOrgId(id);setProjectId("");setSchemeId("");setEditingProject(null);setProjectDraft(emptyProject);setEditingScheme(null);setSchemeDraft(emptyScheme);}
+  function chooseProject(id){setProjectId(id);setSchemeId("");setEditingScheme(null);setSchemeDraft(emptyScheme);}
   const filtered=projects.filter(p=>p.organisation_id===orgId&&(showArchived||p.status==="active"));
   const filteredSchemes=schemes.filter(s=>s.project_id===project?.id&&(showArchived||s.status==="active"));
   return <section className="workspaceContent">
@@ -172,10 +175,11 @@ function Portfolio({user}){
         <div className="workspaceSectionHeading sharedSection"><h2>{project.name} — schemes</h2><button onClick={()=>chooseProject("")}>Close</button></div>
         {project.status==="archived"&&<p className="note">This project is archived.</p>}
         {!filteredSchemes.length&&<p className="schemeEmpty">No accessible schemes yet.</p>}
-        <div className="schemeList">{filteredSchemes.map(s=><article className="schemeCard" key={s.id}><div><h3>{s.name}</h3><p>{s.reference} · {s.location||"Location unassigned"} · {s.status}</p><p>{s.description}</p></div>{canEditScheme&&project.status==="active"&&<div className="chips"><button disabled={busy} onClick={()=>{setEditingScheme(s.id);setSchemeDraft({name:s.name,reference:s.reference,location:s.location,description:s.description});}}>Edit</button><button disabled={busy} onClick={()=>toggleStatus("schemes",s)}>{s.status==="active"?"Archive":"Restore"}</button></div>}</article>)}</div>
+        <div className="schemeList">{filteredSchemes.map(s=><article className="schemeCard" key={s.id}><div><h3>{s.name}</h3><p>{s.reference} · {s.location||"Location unassigned"} · {s.status}</p><p>{s.description}</p></div><div className="chips"><button disabled={busy} onClick={()=>setSchemeId(s.id)}>Open drawings</button>{canEditScheme&&project.status==="active"&&<><button disabled={busy} onClick={()=>{setEditingScheme(s.id);setSchemeDraft({name:s.name,reference:s.reference,location:s.location,description:s.description});}}>Edit</button><button disabled={busy} onClick={()=>toggleStatus("schemes",s)}>{s.status==="active"?"Archive":"Restore"}</button></>}</div></article>)}</div>
         {canEditScheme&&project.status==="active"&&<form className="schemeForm" onSubmit={saveScheme}><h2>{editingScheme?"Edit scheme":"Create scheme"}</h2>{[["name","Name",200],["reference","Reference",100],["location","Location / ELR",200]].map(([field,label,max])=><label key={field}>{label}<input required={field!=="location"} maxLength={max} value={schemeDraft[field]} onChange={e=>setSchemeDraft(d=>({...d,[field]:e.target.value}))}/></label>)}<label>Description<textarea maxLength={4000} value={schemeDraft.description} onChange={e=>setSchemeDraft(d=>({...d,description:e.target.value}))}/></label><div className="chips"><button disabled={busy}>{editingScheme?"Save scheme":"Create scheme"}</button>{editingScheme&&<button type="button" className="sharedSecondary" onClick={()=>{setEditingScheme(null);setSchemeDraft(emptyScheme);}}>Cancel</button>}</div></form>}
+        {scheme&&<DrawingRegister key={scheme.id} db={db} user={user} scheme={scheme} project={project} canUpload={canEditScheme&&project.status==="active"&&scheme.status==="active"} onClose={()=>setSchemeId("")}/>}
       </>}
     </>}
-    <div className="workspaceNotice"><strong>Scope of this release</strong><p>Organisations, projects and schemes are shared database records. Membership roles are enforced in the database; invitations, uploaded drawings, shared asset records and document/action/discussion registers are not yet connected. Archive is a reversible record status, not a security boundary.</p><p><Link href="/projects">Open the existing local prototype →</Link></p></div>
+    <div className="workspaceNotice"><strong>Scope of this release</strong><p>Organisations, projects and schemes are shared database records. Private PDF revisions can be uploaded and opened by authorised members. Call-offs in the shared viewer are temporary scratch work (export JSON before closing); invitations, shared asset records and document/action/discussion registers are not yet connected. Archive is a reversible record status, not a security boundary.</p><p><Link href="/projects">Open the existing local prototype →</Link></p></div>
   </section>;
 }
