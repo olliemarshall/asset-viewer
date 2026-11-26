@@ -2,22 +2,31 @@
 // A searchable text layer can be invisible or have a different colour from the
 // CAD geometry, so use rendered pixels for suggested status, not text colour.
 export const PATTERNS = {
-  signal: /^(?:SA\d{3}|L\d{1,4}R?)$/,
+  signal: /^(?:SA\d{3}|L\d{1,4}R?|OX\d{1,4}(?:\/BR\d{1,4})?|G\d{1,4})$/,
   points: /^PT\d{3}$/,
-  track_circuit: /^(?:TC\d{3}|[A-Z]{1,3}(?:\(\d+\))?T|\d{3,5}(?:\([A-Z0-9]+\))?T)$/,
+  track_circuit: /^(?:TC\d{3}|[A-Z]{1,3}(?:\(\d+\))?T|\d{3,5}(?:\([A-Z0-9]+\))?T|[A-Z]{1,3}\d{0,2}\(T\))$/,
   location_case: /^LC\d{2}$/,
   wheel_sensor: /^(?:AS|ES)\d{1,2}[AB]$/,
-  track_equipment: /^(?:[A-Z]{1,3}(?:\(\d+\))?Q|\d{3,5}(?:\([A-Z0-9]+\))?Q|(?:[A-Z]{2,5}\/)?(?:UM|DM)\d{3,5}[UD])$/,
+  track_equipment: /^(?:[A-Z]{1,3}(?:\(\d+\))?Q|\d{3,5}(?:\([A-Z0-9]+\))?Q|(?:[A-Z]{2,5}\/)?(?:UM|DM)\d{3,5}[UD]|\([A-Z]{1,5}\)Q|[A-Z]{1,3}Q\d{1,3}|BUSQ|(?:[A-Z]{2,4})(?:UM|DM)\d{2,5}(?:LCAW|SNB|PSI\d{1,3}|LX\d{1,3}))$/,
   pole: /^POLE\d{1,3}$/,
 };
 
 // Specific identifiers must take precedence over the broader signal rule.
 const TYPES = ["points", "track_circuit", "location_case", "wheel_sensor", "track_equipment", "pole", "signal"];
-export function matchAssetLabel(text) {
+export function matchAssetLabel(text, profile = "standard") {
   const label = String(text || "").trim().replace(/\s+/g, "").toUpperCase();
   for (const candidate of [label, [...label].reverse().join("")]) {
     const type = TYPES.find(key => PATTERNS[key].test(candidate));
     if (type) return { label: candidate, type };
+    // Short references are ambiguous outside the long strip-plan profile.
+    if (profile === "strip") {
+      if (/^(?:BR|BH)\d{1,3}$/.test(candidate)) return { label: candidate, type: "track_equipment", uncertain: true };
+      if (/^\d{1,2}[AB]$/.test(candidate)) return { label: candidate, type: "points", uncertain: true };
+      if (/^[A-Z]{2}$/.test(candidate) && !/^(?:AR|SR|LR|NC|ED|YN|YO|ZN|ZO|RR|SB|LC|UP|DN|GC|NR|OX|BR|BH|TO|NO|BY|AT|ON|AS|IN|OF|IS|IT|BE)$/.test(candidate)) {
+        return { label: candidate, type: "axle_counter", uncertain: true };
+      }
+      if (candidate === "BE") return { label: candidate, type: "axle_counter", uncertain: true };
+    }
   }
   return null;
 }
@@ -33,11 +42,14 @@ export const STATUS_ORDER = ["NEW", "EXISTING", "RECOVER", "PROPOSED", "REVIEW"]
 
 const STANDARD = { left: 0, right: 1, top: 0.1, bottom: 0.73 };
 const WIDE = { left: 0.02, right: 0.60, top: 0.1, bottom: 0.73 };
+const STRIP = { left: 0.145, right: 0.80, top: 0.10, bottom: 0.90, profile: "strip", name: "Long strip plan (central drawing)" };
 
 // Only infer a wide-layout exclusion when the notes-column evidence is present.
 // Other layouts retain the previous vertical restriction. The user can also
 // override the layout choice in the viewer or search the whole page.
 export function chooseDrawingRegion(aspect, rightColumnText, mode = "auto") {
+  if (mode === "strip" || (mode === "auto" && aspect >= 7 &&
+      /GENERAL\s*NOTES|TRAIN\s*DETECTION\s*NOTES/i.test(rightColumnText))) return { ...STRIP };
   const wide = mode === "wide" || (mode === "auto" && aspect >= 2.8 &&
     /WHEEL\s*SENSOR\s*NAMING\s*CONVENTION/i.test(rightColumnText));
   return wide ? { ...WIDE, name: "Wide plan (left 60%)" } : { ...STANDARD, name: "Standard plan" };
@@ -104,11 +116,16 @@ export async function extractFromPdf(data, { restrictToDrawing = true, regionMod
 
   const pdf = await pdfjs.getDocument({ data, isEvalSupported: false }).promise;
   const page = await pdf.getPage(1);
-  const viewport = page.getViewport({ scale: 2 });
+  const original = page.getViewport({ scale: 1 });
+  // Long CAD sheets can exceed browser canvas dimension/pixel budgets at 2x.
+  const scale = Math.min(2, 8192 / Math.max(original.width, original.height),
+    Math.sqrt(16000000 / (original.width * original.height)));
+  const viewport = page.getViewport({ scale });
   const canvas = document.createElement("canvas");
   canvas.width = Math.floor(viewport.width);
   canvas.height = Math.floor(viewport.height);
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) throw new Error("The drawing is too large for this browser to render.");
   await page.render({ canvasContext: ctx, viewport }).promise;
 
   const text = await page.getTextContent();
@@ -120,11 +137,11 @@ export async function extractFromPdf(data, { restrictToDrawing = true, regionMod
 
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
-    let match = matchAssetLabel(item.str);
+    let match = matchAssetLabel(item.str, region.profile);
     let bounds = item.bounds;
     const next = items[i + 1];
     if (next && !item.hasEOL && /^[TQ]$/i.test(next.str.trim()) && nearby(bounds, next.bounds)) {
-      const joined = matchAssetLabel(item.str + next.str);
+      const joined = matchAssetLabel(item.str + next.str, region.profile);
       if (joined && ["track_circuit", "track_equipment"].includes(joined.type)) {
         match = joined;
         bounds = mergeBounds(bounds, next.bounds);
@@ -138,16 +155,20 @@ export async function extractFromPdf(data, { restrictToDrawing = true, regionMod
     if (restrictToDrawing && !inside) continue;
     if (x < 0 || x > 1 || y < 0 || y > 1) continue;
 
-    const status = classifyPixels(ctx, bounds);
+    // Short identifiers are only meaningful near the track diagram in this
+    // layout, not in the control/notes insets.
+    const mainTrack = region.profile === "strip" && y >= 0.52 && y <= 0.71;
+    if (region.profile === "strip" && match.uncertain && !mainTrack) continue;
+    const status = match.uncertain ? "REVIEW" : classifyPixels(ctx, bounds);
+    const rank = (inside ? 2 : 0) + (mainTrack ? 4 : 0) + (status !== "REVIEW" ? 1 : 0);
     const previous = assets.get(match.label);
     // Prefer a diagram occurrence over a repeated label in a notes table.
-    if (!previous || (!previous.inside && inside) ||
-      (previous.inside === inside && previous.status === "REVIEW" && status !== "REVIEW")) {
-      assets.set(match.label, { ...match, status, x, y, inside });
+    if (!previous || rank > previous.rank) {
+      assets.set(match.label, { label: match.label, type: match.type, status, x, y, rank });
     }
   }
   return {
-    canvas, assets: [...assets.values()].map(({ inside, ...asset }) => asset),
+    canvas, assets: [...assets.values()].map(({ rank, ...asset }) => asset),
     hasText: items.length > 0, region: restrictToDrawing ? region.name : "Whole page",
   };
 }
