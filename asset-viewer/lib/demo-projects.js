@@ -14,7 +14,15 @@ export const demoProjects = [
         reference: "26-NE-0012",
         location: "BGK",
         description: "Scheme plan asset register and multidisciplinary coordination.",
-        drawing: "26-NE-0012 · Version 1.2",
+        drawings: [
+          {
+            id: "scheme-plan-v1-2",
+            title: "Scheme plan",
+            reference: "26-NE-0012",
+            revision: "1.2",
+            discipline: "Signalling",
+          },
+        ],
       },
     ],
   },
