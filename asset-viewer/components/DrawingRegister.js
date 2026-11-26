@@ -21,6 +21,7 @@ export default function DrawingRegister({db,user,scheme,project,canUpload,onClos
   const [file,setFile]=useState(null),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false);
   const [error,setError]=useState(""),[notice,setNotice]=useState(""),[opened,setOpened]=useState(null);
   const [retry,setRetry]=useState(null);
+  const [uploadOpen,setUploadOpen]=useState(false);
   const [scratchChanged,setScratchChanged]=useState(false);
   const input=useRef(null),live=useRef(true),working=useRef(false);
   useEffect(()=>{live.current=true;return()=>{live.current=false;};},[]);
@@ -67,7 +68,7 @@ export default function DrawingRegister({db,user,scheme,project,canUpload,onClos
         scheme_id:scheme.id,title:draft.title.trim(),reference:draft.reference.trim(),revision:draft.revision.trim(),
         discipline:draft.discipline,description:draft.description.trim(),filename:file.name,byte_size:file.size,fingerprint:hash
       }).select(cols).single());
-      try{await complete(row,file);setNotice("PDF uploaded and verified.");}
+      try{await complete(row,file);setNotice("PDF uploaded and verified.");setUploadOpen(false);}
       catch(e){setRetry(row.id);throw Error("Drawing registered but upload is incomplete. Resume the pending record: "+e.message);}
       finally{setDraft(empty);setFile(null);if(input.current)input.current.value="";await refresh();}
     });
@@ -92,23 +93,23 @@ export default function DrawingRegister({db,user,scheme,project,canUpload,onClos
     <AssetViewer key={opened.row.id} context={{scope:"shared:"+user.id+":"+opened.row.id,title:opened.row.title+" · Rev "+opened.row.revision,shared:true}} initialPdf={{buffer:opened.buffer,name:opened.row.filename}} onScratchChange={setScratchChanged}/>
   </div>;
   return <section className="drawingRegister">
-    <div className="workspaceSectionHeading sharedSection"><h2>{scheme.name} — drawing register</h2><button disabled={busy} onClick={onClose}>Close</button></div>
+    <div className="swSectionHeader"><h2>Drawing register</h2><div className="chips">{canUpload&&<button className="swPrimary" disabled={busy} onClick={()=>{setRetry(null);setUploadOpen(v=>!v);setFile(null);}}>{uploadOpen?"Cancel upload":"＋ Upload drawing"}</button>}<button disabled={busy} onClick={onClose}>Back to schemes</button></div></div>
     <p className="note">Private PDF revisions · shared with authorised project members. Only upload files approved for this development environment.</p>
     {error&&<p className="error" role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
     <button disabled={busy||loading} onClick={refresh}>Refresh drawings</button>
     {loading?<p>Loading drawings…</p>:!drawings.length?<p className="schemeEmpty">No drawing revisions registered.</p>:<div className="schemeList">
       {drawings.map(row=><article className="schemeCard" key={row.id}>
         <div><h3>{row.title}</h3><p>{row.reference} · Rev {row.revision} · {row.discipline}</p><p>{row.filename} · {(Number(row.byte_size)/1048576).toFixed(2)} MiB · {new Date(row.created_at).toLocaleDateString("en-GB")}</p><p>{row.description}</p><span className="note">{row.upload_status==="ready"?"Stored PDF":"Upload pending"}</span></div>
-        <div className="chips">{row.upload_status==="ready"?<button disabled={busy} onClick={()=>open(row)}>Open drawing</button>:canUpload&&row.uploaded_by===user.id&&<button disabled={busy} onClick={()=>{setRetry(row.id);setFile(null);}}>Resume upload</button>}</div>
+        <div className="chips">{row.upload_status==="ready"?<button disabled={busy} onClick={()=>open(row)}>Open drawing</button>:canUpload&&row.uploaded_by===user.id&&<button disabled={busy} onClick={()=>{setRetry(row.id);setFile(null);setUploadOpen(false);}}>Resume upload</button>}</div>
       </article>)}
     </div>}
     {canUpload&&retry&&<div className="schemeForm"><h2>Resume pending upload</h2><p className="note">Choose the exact original PDF if the file has not yet been stored. A successfully stored PDF can be finalised without choosing a file.</p><input type="file" accept="application/pdf,.pdf" disabled={busy} onChange={e=>setFile(e.target.files[0]||null)}/><div className="chips"><button disabled={busy||!drawings.some(d=>d.id===retry&&d.upload_status==="pending")} onClick={()=>resume(drawings.find(d=>d.id===retry))}>Resume / finalise</button><button disabled={busy} onClick={()=>{setRetry(null);setFile(null);}}>Cancel</button></div></div>}
-    {canUpload&&!retry&&<form className="schemeForm" onSubmit={submit}><h2>Upload drawing revision</h2>
+    {canUpload&&uploadOpen&&!retry&&<form className="swFormPanel swForm" onSubmit={submit}><h2>Upload drawing revision</h2>
       {[["title","Drawing title",200],["reference","Drawing reference",100],["revision","Revision",40]].map(([k,label,max])=><label key={k}>{label}<input required maxLength={max} disabled={busy} value={draft[k]} onChange={e=>setDraft(d=>({...d,[k]:e.target.value}))}/></label>)}
       <label>Discipline<select value={draft.discipline} disabled={busy} onChange={e=>setDraft(d=>({...d,discipline:e.target.value}))}>{DISCIPLINES.map(d=><option key={d}>{d}</option>)}</select></label>
       <label>Description<textarea maxLength={4000} value={draft.description} disabled={busy} onChange={e=>setDraft(d=>({...d,description:e.target.value}))}/></label>
       <label>PDF (max 25 MiB)<input ref={input} type="file" accept="application/pdf,.pdf" required disabled={busy} onChange={e=>setFile(e.target.files[0]||null)}/></label>
-      <button disabled={busy||!file}>{busy?"Uploading / verifying…":"Upload drawing"}</button>
+      <button className="swPrimary" disabled={busy||!file}>{busy?"Uploading / verifying…":"Upload drawing"}</button>
     </form>}
     {!canUpload&&<p className="note">Read-only drawing access. Uploading requires an editor or administrator on an active project and scheme.</p>}
   </section>;
