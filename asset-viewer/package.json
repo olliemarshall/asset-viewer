@@ -6,7 +6,8 @@
     "dev": "next dev --webpack",
     "build": "next build --webpack",
     "start": "next start",
-    "postinstall": "node scripts/copy-worker.js"
+    "postinstall": "node scripts/copy-worker.js",
+    "test": "node --test tools/test-assurance-tracking.mjs"
   },
   "dependencies": {
     "next": "16.4.6",
