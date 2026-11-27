@@ -16,10 +16,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      # No committed lockfile yet. Replace with npm ci when verified.
-      - run: npm install --no-audit --no-fund
+      # Use the lockfile as soon as one has been generated and committed.
+      - run: |
+          if [ -f package-lock.json ]; then npm ci --no-audit --no-fund; else npm install --no-audit --no-fund; fi
       - run: npm test
       - run: npm run build
-      - name: Dependency advisory report (not yet a release gate)
-        run: npm audit --audit-level=high
-        continue-on-error: true
+      - name: Dependency security gate
+        run: npm run audit:security

@@ -1,3 +1,4 @@
+import { loadPdfDocument } from "./pdf-engine.js";
 // Extract candidate assets from the first page of a vector PDF.
 // A searchable text layer can be invisible or have a different colour from the
 // CAD geometry, so use rendered pixels for suggested status, not text colour.
@@ -111,10 +112,8 @@ function nearby(a, b) {
 }
 
 export async function extractFromPdf(data, { restrictToDrawing = true, regionMode = "auto" } = {}) {
-  const pdfjs = await import("pdfjs-dist/build/pdf");
-  pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.js";
-
-  const pdf = await pdfjs.getDocument({ data, isEvalSupported: false }).promise;
+  const pdf = await loadPdfDocument(data);
+  try {
   const page = await pdf.getPage(1);
   const original = page.getViewport({ scale: 1 });
   // Long CAD sheets can exceed browser canvas dimension/pixel budgets at 2x.
@@ -172,4 +171,5 @@ export async function extractFromPdf(data, { restrictToDrawing = true, regionMod
     hasText: items.length > 0, region: restrictToDrawing ? region.name : "Whole page",
     regionBounds: restrictToDrawing ? {left:region.left,right:region.right,top:region.top,bottom:region.bottom} : {left:0,right:1,top:0,bottom:1},
   };
+  } finally { await pdf.destroy(); }
 }
