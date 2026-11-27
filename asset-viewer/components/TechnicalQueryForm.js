@@ -30,12 +30,9 @@ export default function TechnicalQueryForm({project,draft,setDraft,disabled}){
   <label>Change to scope of work?<select value={d.word_scope_change||""} onChange={e=>put("word_scope_change",e.target.value)}>{[...new Set(["","Yes","No","To be determined",d.word_scope_change||""])].map(v=><option key={v} value={v}>{v||"Not recorded"}</option>)}</select></label>
   <div className="tqGrid">{input("word_contractor","Contractor")}{input("word_contractor_name","Contractor representative name")}</div>
   <p className="note">Signature and formal CEM confirmation must be completed through the authorised process.</p>
-  <h3>Part 4 — Project's response</h3>
-  <p className="note">Record the actual employer response and evidence only. This does not issue a response, instruction or approval. The native originator draft leaves Part 4 untouched.</p>
-  {area("response","Reply / response evidence",5)}
-  <div className="tqGrid">{input("word_reply_ref","Response reference")}{input("word_reply_date","Response received (actual)","date")}{input("word_pe","Discipline Project Engineer name (recorded)")}{input("word_dpe","Designated Project Engineer name (recorded)")}{input("word_pm","Project Manager name (recorded)")}{input("instruction","Separate instruction reference (if applicable)")}</div>
   <h3>SchemeWorks — management tracking</h3>
   <div className="tqGrid"><label>Owner / responsible person<input maxLength={200} value={draft.owner} onChange={e=>base("owner",e.target.value)}/></label><label>Tracker due date<input type="date" value={draft.due_date} onChange={e=>base("due_date",e.target.value)}/></label><label>Record status<select value={draft.status} onChange={e=>base("status",e.target.value)}>{Object.entries({draft:"Draft",open:"Open",in_review:"In review",closed:"Closed (record only)",withdrawn:"Withdrawn"}).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label></div>
+  <details className="nativeFields"><summary>External response tracking (optional)</summary><div className="tqGrid">{input("word_reply_ref","External response reference")}{input("word_reply_date","Response received (actual)","date")}{input("instruction","Separate instruction reference (if applicable)")}</div>{area("response","Response evidence / tracking note",3)}</details>
   <p className="note">Tracker due date is separate from the contractual response date. Neither status nor a TQ response is authority to commence work.</p>
  </fieldset>;
 }
