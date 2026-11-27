@@ -19,8 +19,8 @@ try {
 
 function Header({user,onSignOut}) {
   return <header className="workspaceTopbar">
-    <Link className="workspaceBrand" href="/workspace"><span className="swMark" aria-hidden="true">S</span><span>Scheme<span className="swBrandAccent">Works</span></span></Link>
-    <div className="sharedHeaderActions"><Link href="/projects">Local prototype</Link>{user&&<><span className="note">{user.email}</span><button onClick={onSignOut}>Sign out</button></>}</div>
+    <Link className="workspaceBrand" href="/"><span className="swMark" aria-hidden="true">S</span><span>Scheme<span className="swBrandAccent">Works</span></span></Link>
+    <div className="sharedHeaderActions"><Link href="/viewer">PDF viewer</Link><Link href="/projects">Local prototype</Link>{user&&<><span className="note">{user.email}</span><button onClick={onSignOut}>Sign out</button></>}</div>
   </header>;
 }
 
