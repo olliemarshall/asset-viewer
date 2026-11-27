@@ -12,7 +12,7 @@ function csv(name,rows){
 }
 async function loadRelated(db,table,ids){
  const all=[];
- for(let i=0;i<ids.length;i+=100){const batch=ids.slice(i,i+100);let offset=0;for(;;){const page=check(await db.from(table).select("*").in("record_id",batch).order("record_id").order(table==="assurance_reviews"?"record_version":"assigned_at").range(offset,offset+499));if(!page?.length)break;all.push(...page);offset+=page.length;}}
+ for(let i=0;i<ids.length;i+=100){const batch=ids.slice(i,i+100);let offset=0;for(;;){const page=check(await db.from(table).select(table==="assurance_reviews"?"record_id,record_version,reviewer_id,requested_by,status,request_note,decision_note":"record_id,assignee_id,assigned_by,assigned_at").in("record_id",batch).order("record_id").order(table==="assurance_reviews"?"record_version":"assigned_at").range(offset,offset+499));if(!page?.length)break;all.push(...page);offset+=page.length;}}
  return all;
 }
 export default function Trackers({db,project,onOpenRecord}){
