@@ -14,6 +14,7 @@ create index project_audit_events_project_idx on public.project_audit_events(pro
 alter table public.project_audit_events enable row level security;
 revoke all on public.project_audit_events from public,anon,authenticated;
 grant select on public.project_audit_events to authenticated;
+revoke all on sequence public.project_audit_events_id_seq from public,anon,authenticated;
 create policy audit_admin_read on public.project_audit_events for select to authenticated using(
  exists(select 1 from public.projects p where p.id=project_id and workspace_private.org_member(p.organisation_id,true))
 );
@@ -47,6 +48,12 @@ revoke all on function workspace_private.audit_project_change() from public,anon
 do $$declare t text;begin
  foreach t in array array['projects','project_members','schemes','drawings','drawing_folders','drawing_folder_locations','drawing_calloff_sets','assurance_records','assurance_attachments','assurance_templates','native_word_templates','project_engineers','assurance_assignments','assurance_reviews'] loop
   execute format('create trigger sw_audit_change after insert or update or delete on public.%I for each row execute function workspace_private.audit_project_change()',t);
+ end loop;
+ -- PR14 is independent; include its tables when that migration is already present.
+ foreach t in array array['master_assets','asset_drawing_links','asset_assurance_links'] loop
+  if to_regclass('public.'||t) is not null then
+   execute format('create trigger sw_audit_change after insert or update or delete on public.%I for each row execute function workspace_private.audit_project_change()',t);
+  end if;
  end loop;
 end;$$;
 
