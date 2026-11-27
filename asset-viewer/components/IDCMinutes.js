@@ -1,5 +1,5 @@
 "use client";
-import {useState,useRef} from "react";
+import {useState,useRef,useEffect} from "react";
 import {localDay} from "../lib/assurance-tracking";
 const statuses={open:"Open",closed:"Closed",note:"Note",deferred:"Deferred"};
 const blank=()=>({drawing:"",minute:"",raised:"",owner:"",response:"",status:"open",due_date:""});
@@ -10,7 +10,8 @@ export default function IDCMinutes({db,project,rows,canEdit,onSaved,initialRecor
  const [header,setHeader]=useState(()=>initial?headerFrom(initial):{meetingRef:"",meetingDate:localDay(),drawingRef:"",revision:"",attendees:""});
  const [entry,setEntry]=useState(blank),[busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
  const [editing,setEditing]=useState(null),[filter,setFilter]=useState(""),[statusFilter,setStatusFilter]=useState("");
- const lock=useRef(false),minuteInput=useRef(null);
+ const lock=useRef(false),minuteInput=useRef(null),initialised=useRef(false);
+ useEffect(()=>{if(initial&&!initialised.current){initialised.current=true;setHeader(headerFrom(initial));setFilter(initial.details.idc_meeting_ref);}},[initial]);
  const updateHeader=(k,v)=>setHeader(h=>({...h,[k]:v}));
  const put=(k,v)=>setEntry(d=>({...d,[k]:v}));
  const meetings=[...new Map(minutes.map(r=>[r.details.idc_meeting_ref,r])).values()];
