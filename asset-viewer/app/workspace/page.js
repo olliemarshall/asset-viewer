@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import DrawingRegister from "../../components/DrawingRegister";
+import AssuranceWorkspace from "../../components/AssuranceWorkspace";
 import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -89,6 +90,7 @@ function Portfolio({user}){
   const [orgId,setOrgId]=useState("");
   const [projectId,setProjectId]=useState("");
   const [schemeId,setSchemeId]=useState("");
+  const [projectTab,setProjectTab]=useState("schemes");
   const [orgName,setOrgName]=useState("");
   const [projectDraft,setProjectDraft]=useState(emptyProject);
   const [schemeDraft,setSchemeDraft]=useState(emptyScheme);
@@ -151,14 +153,14 @@ function Portfolio({user}){
     if(!window.confirm((status==="archived"?"Archive ":"Restore ")+item.name+"?"))return;
     write(()=>db.from(table).update({status}).eq("id",item.id).select("id").single());
   }
-  function chooseOrg(id){setSearch("");setForm(null);setOrgId(id);setProjectId("");setSchemeId("");setEditingProject(null);setProjectDraft(emptyProject);setEditingScheme(null);setSchemeDraft(emptyScheme);}
-  function chooseProject(id){setSearch("");setForm(null);setProjectId(id);setSchemeId("");setEditingScheme(null);setSchemeDraft(emptyScheme);}
+  function chooseOrg(id){setProjectTab("schemes");setSearch("");setForm(null);setOrgId(id);setProjectId("");setSchemeId("");setEditingProject(null);setProjectDraft(emptyProject);setEditingScheme(null);setSchemeDraft(emptyScheme);}
+  function chooseProject(id){setProjectTab("schemes");setSearch("");setForm(null);setProjectId(id);setSchemeId("");setEditingScheme(null);setSchemeDraft(emptyScheme);}
   const matches=item=>[item.name,item.reference,item.description,item.location].some(v=>String(v||"").toLowerCase().includes(search.trim().toLowerCase()));
   const orgProjects=projects.filter(p=>p.organisation_id===orgId);
   const projectSchemes=schemes.filter(s=>s.project_id===project?.id);
   const filtered=orgProjects.filter(p=>(showArchived||p.status==="active")&&matches(p));
   const filteredSchemes=projectSchemes.filter(s=>(showArchived||s.status==="active")&&matches(s));
-  const chooseScheme=id=>{setSchemeId(id);setForm(null);setSearch("");};
+  const chooseScheme=id=>{setProjectTab("schemes");setSchemeId(id);setForm(null);setSearch("");};
   const cancelForm=()=>{setForm(null);setEditingProject(null);setEditingScheme(null);setProjectDraft(emptyProject);setSchemeDraft(emptyScheme);setOrgName("");};
   function newProject(){cancelForm();setForm("project");}
   function newScheme(){cancelForm();setForm("scheme");}
@@ -182,7 +184,7 @@ function Portfolio({user}){
           <p className="workspaceLead">{scheme?scheme.reference+(scheme.location?" · "+scheme.location:""):project?project.reference+" · "+(project.description||"Engineering schemes"):"Manage your engineering projects, schemes and drawings."}</p>
         </div>
         <div className="swHeadingActions">
-          {!scheme&&project&&canEditScheme&&project.status==="active"&&<button className="swPrimary" disabled={busy} onClick={newScheme}>＋ New scheme</button>}
+          {!scheme&&project&&projectTab==="schemes"&&canEditScheme&&project.status==="active"&&<button className="swPrimary" disabled={busy} onClick={newScheme}>＋ New scheme</button>}
           {!project&&org&&admin&&<button className="swPrimary" disabled={busy} onClick={newProject}>＋ New project</button>}
           {!org&&<button className="swPrimary" disabled={busy} onClick={()=>setForm("organisation")}>＋ New organisation</button>}
           <button disabled={busy||loading} onClick={()=>setRevision(n=>n+1)}>Refresh</button>
@@ -199,7 +201,8 @@ function Portfolio({user}){
           <label>Description<textarea maxLength={4000} rows={3} value={schemeDraft.description} onChange={e=>setSchemeDraft(d=>({...d,description:e.target.value}))}/></label><button className="swPrimary" disabled={busy}>{editingScheme?"Save changes":"Create scheme"}</button>
         </form>:<p className="note">You do not have permission to edit this record.</p>}
       </section>}
-      {loading?<p className="swEmpty">Loading shared records…</p>:scheme?<DrawingRegister key={scheme.id} db={db} user={user} scheme={scheme} project={project} canUpload={canEditScheme&&project.status==="active"&&scheme.status==="active"} onClose={()=>chooseScheme("")}/>:org?<>
+      {project&&!scheme&&<nav className="assuranceTabs" aria-label="Project sections"><button className={projectTab==="schemes"?"active":""} onClick={()=>{setProjectTab("schemes");cancelForm();}}>Schemes</button><button className={projectTab==="assurance"?"active":""} onClick={()=>{setProjectTab("assurance");cancelForm();}}>Engineering assurance</button></nav>}
+      {loading?<p className="swEmpty">Loading shared records…</p>:project&&!scheme&&projectTab==="assurance"?<AssuranceWorkspace key={project.id} db={db} project={project} canEdit={canEditScheme&&project.status==="active"}/>:scheme?<DrawingRegister key={scheme.id} db={db} user={user} scheme={scheme} project={project} canUpload={canEditScheme&&project.status==="active"&&scheme.status==="active"} onClose={()=>chooseScheme("")}/>:org?<>
         <div className="swStats">
           <div><span>{project?"Active schemes":"Active projects"}</span><strong>{(project?projectSchemes:orgProjects).filter(x=>x.status==="active").length}</strong></div>
           <div><span>{project?"Archived schemes":"Archived projects"}</span><strong>{(project?projectSchemes:orgProjects).filter(x=>x.status==="archived").length}</strong></div>
@@ -218,7 +221,7 @@ function Portfolio({user}){
           {(project?canEditScheme&&project.status==="active":admin)&&<><button disabled={busy} onClick={()=>project?editScheme(item):editProject(item)}>Edit</button><button disabled={busy} onClick={()=>toggleStatus(project?"schemes":"projects",item)}>{item.status==="active"?"Archive":"Restore"}</button></>}</div>
         </article>)}</div>
       </>:<div className="swEmpty"><h2>Start with an organisation</h2><p>Create an organisation to manage engineering projects and schemes.</p></div>}
-      <footer className="swFooter">SchemeWorks · Development preview · Use approved test data only. Drawing call-offs are shared revision-specific drafts; engineering verification required.</footer>
+      <footer className="swFooter">SchemeWorks · Development preview · Use approved test data only. Drawing call-offs and assurance records are working drafts; engineering verification required.</footer>
     </main>
   </div>;
 }
