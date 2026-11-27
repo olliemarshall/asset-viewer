@@ -93,7 +93,7 @@ alter table public.project_engineers add constraint project_engineers_designatio
 alter table public.project_engineers add constraint project_engineers_management_no_review check(designation<>'Project Management' or not can_review);
 create or replace function workspace_private.configure_project_engineer(pid uuid, account_email text, person_name text, job_role text, review_permission boolean, enabled boolean)
 returns uuid language plpgsql security definer set search_path=''
-as $
+as $$
 declare oid uuid; uid uuid; member_role text;
 begin
  select organisation_id into oid from public.projects where id=pid and status='active';
@@ -113,16 +113,16 @@ begin
  insert into public.project_engineers(project_id,user_id,display_name,designation,can_review,active) values(pid,uid,trim(person_name),job_role,review_permission,enabled)
  on conflict(project_id,user_id) do update set display_name=excluded.display_name,designation=excluded.designation,can_review=excluded.can_review,active=excluded.active;
  return uid;
-end; $;
+end; $$;
 
 create or replace function workspace_private.engineer_is_eligible(pid uuid, uid uuid, reviewer boolean)
 returns boolean language sql stable security definer set search_path=''
-as $ select auth.uid() is not null and exists(
+as $$ select auth.uid() is not null and exists(
  select 1 from public.projects p join public.project_engineers e on e.project_id=p.id
  join public.organisation_members om on om.organisation_id=p.organisation_id and om.user_id=e.user_id
  where p.id=pid and p.status='active' and e.user_id=uid and e.active and e.designation<>'Project Management' and (not reviewer or e.can_review)
  and (om.role='admin' or exists(select 1 from public.project_members pm where pm.project_id=pid and pm.user_id=uid and pm.role='editor'))
-); $;
+); $$;
 
 -- Restrict appointment files to organisation administrators for now.
 -- Appointment register metadata remains project-visible. No confidential
