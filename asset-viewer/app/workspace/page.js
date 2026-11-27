@@ -2,6 +2,8 @@
 import Link from "next/link";
 import DrawingRegister from "../../components/DrawingRegister";
 import AssuranceWorkspace from "../../components/AssuranceWorkspace";
+import DocumentTemplates from "../../components/DocumentTemplates";
+import EngineeringManagement from "../../components/EngineeringManagement";
 import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -91,6 +93,8 @@ function Portfolio({user}){
   const [projectId,setProjectId]=useState("");
   const [schemeId,setSchemeId]=useState("");
   const [projectTab,setProjectTab]=useState("schemes");
+  const [initialRecord,setInitialRecord]=useState(null);
+  function openAssuranceRecord(record){setInitialRecord({id:record.id,kind:record.kind});setProjectTab("assurance");cancelForm();}
   const [orgName,setOrgName]=useState("");
   const [projectDraft,setProjectDraft]=useState(emptyProject);
   const [schemeDraft,setSchemeDraft]=useState(emptyScheme);
@@ -153,8 +157,8 @@ function Portfolio({user}){
     if(!window.confirm((status==="archived"?"Archive ":"Restore ")+item.name+"?"))return;
     write(()=>db.from(table).update({status}).eq("id",item.id).select("id").single());
   }
-  function chooseOrg(id){setProjectTab("schemes");setSearch("");setForm(null);setOrgId(id);setProjectId("");setSchemeId("");setEditingProject(null);setProjectDraft(emptyProject);setEditingScheme(null);setSchemeDraft(emptyScheme);}
-  function chooseProject(id){setProjectTab("schemes");setSearch("");setForm(null);setProjectId(id);setSchemeId("");setEditingScheme(null);setSchemeDraft(emptyScheme);}
+  function chooseOrg(id){setInitialRecord(null);setProjectTab("schemes");setSearch("");setForm(null);setOrgId(id);setProjectId("");setSchemeId("");setEditingProject(null);setProjectDraft(emptyProject);setEditingScheme(null);setSchemeDraft(emptyScheme);}
+  function chooseProject(id){setInitialRecord(null);setProjectTab("schemes");setSearch("");setForm(null);setProjectId(id);setSchemeId("");setEditingScheme(null);setSchemeDraft(emptyScheme);}
   const matches=item=>[item.name,item.reference,item.description,item.location].some(v=>String(v||"").toLowerCase().includes(search.trim().toLowerCase()));
   const orgProjects=projects.filter(p=>p.organisation_id===orgId);
   const projectSchemes=schemes.filter(s=>s.project_id===project?.id);
@@ -201,8 +205,8 @@ function Portfolio({user}){
           <label>Description<textarea maxLength={4000} rows={3} value={schemeDraft.description} onChange={e=>setSchemeDraft(d=>({...d,description:e.target.value}))}/></label><button className="swPrimary" disabled={busy}>{editingScheme?"Save changes":"Create scheme"}</button>
         </form>:<p className="note">You do not have permission to edit this record.</p>}
       </section>}
-      {project&&!scheme&&<nav className="assuranceTabs" aria-label="Project sections"><button className={projectTab==="schemes"?"active":""} onClick={()=>{setProjectTab("schemes");cancelForm();}}>Schemes</button><button className={projectTab==="assurance"?"active":""} onClick={()=>{setProjectTab("assurance");cancelForm();}}>Engineering assurance</button></nav>}
-      {loading?<p className="swEmpty">Loading shared records…</p>:project&&!scheme&&projectTab==="assurance"?<AssuranceWorkspace key={project.id} db={db} project={project} canEdit={canEditScheme&&project.status==="active"}/>:scheme?<DrawingRegister key={scheme.id} db={db} user={user} scheme={scheme} project={project} canUpload={canEditScheme&&project.status==="active"&&scheme.status==="active"} onClose={()=>chooseScheme("")}/>:org?<>
+      {project&&!scheme&&<nav className="assuranceTabs" aria-label="Project sections">{[["schemes","Schemes"],["assurance","Engineering assurance"],["templates","Document templates"],["management","Engineering management"]].map(([k,label])=><button key={k} className={projectTab===k?"active":""} onClick={()=>{setInitialRecord(null);setProjectTab(k);cancelForm();}}>{label}</button>)}</nav>}
+      {loading?<p className="swEmpty">Loading shared records…</p>:project&&!scheme&&projectTab==="assurance"?<AssuranceWorkspace key={project.id+":"+(initialRecord?.id||"")} db={db} project={project} initialRecord={initialRecord} canEdit={canEditScheme&&project.status==="active"}/>:project&&!scheme&&projectTab==="templates"?<DocumentTemplates key={project.id} db={db} project={project} canEdit={canEditScheme&&project.status==="active"} onOpenRecord={openAssuranceRecord}/>:project&&!scheme&&projectTab==="management"?<EngineeringManagement key={project.id} db={db} project={project} onOpenRecord={openAssuranceRecord}/>:scheme?<DrawingRegister key={scheme.id} db={db} user={user} scheme={scheme} project={project} canUpload={canEditScheme&&project.status==="active"&&scheme.status==="active"} onClose={()=>chooseScheme("")}/>:org?<>
         <div className="swStats">
           <div><span>{project?"Active schemes":"Active projects"}</span><strong>{(project?projectSchemes:orgProjects).filter(x=>x.status==="active").length}</strong></div>
           <div><span>{project?"Archived schemes":"Archived projects"}</span><strong>{(project?projectSchemes:orgProjects).filter(x=>x.status==="archived").length}</strong></div>
