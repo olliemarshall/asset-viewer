@@ -1,6 +1,8 @@
 "use client";
 export default function TechnicalQueryForm({project,draft,setDraft,disabled}){
  const d=draft.details||{};
+ const extras=Array.isArray(d.word_extra_options)?d.word_extra_options:[];
+ const changeExtra=(i,k,v)=>put("word_extra_options",extras.map((row,j)=>i===j?{...row,[k]:v}:row));
  const put=(key,value)=>setDraft(old=>({...old,details:{...old.details,[key]:value}}));
  const base=(key,value)=>setDraft(old=>({...old,[key]:value}));
  const input=(key,label,type="text")=><label key={key}>{label}<input type={type} maxLength={2000} value={d[key]||""} onChange={e=>put(key,e.target.value)}/></label>;
@@ -17,7 +19,7 @@ export default function TechnicalQueryForm({project,draft,setDraft,disabled}){
   <div className="tqGrid">{input("word_sent","Date sent (actual)","date")}{input("word_received","Date received by project (actual)","date")}{input("word_doc_ref","Document reference (where applicable)")}{input("word_doc_title","Document title (where applicable)")}</div>
   {area("question","Detailed description of query / question",6)}
   <h3>Part 2 — Contractor's possible solutions</h3>
-  <div className="tqOptions"><table><thead><tr><th>Solution(s)</th><th>Estimated cost impact</th><th>Estimated programme impact</th></tr></thead><tbody>{[1,2].map(n=><tr key={n}><td>{area("word_solution"+n,"Option "+n+" — solution and technical compliance")}</td><td>{area("word_cost"+n,"Cost impact "+n)}</td><td>{area("word_programme"+n,"Programme impact "+n)}</td></tr>)}</tbody></table></div>
+  <div className="tqOptions"><table><thead><tr><th>Solution(s)</th><th>Estimated cost impact</th><th>Estimated programme impact</th></tr></thead><tbody>{[1,2].map(n=><tr key={n}><td>{area("word_solution"+n,"Option "+n+" — solution and technical compliance")}</td><td>{area("word_cost"+n,"Cost impact "+n)}</td><td>{area("word_programme"+n,"Programme impact "+n)}</td></tr>)}{extras.map((row,i)=><tr key={i+2}><td><label>Option {i+3} — solution and technical compliance<textarea rows={3} maxLength={2000} value={row.solution||""} onChange={e=>changeExtra(i,"solution",e.target.value)}/></label><button type="button" onClick={()=>{if(!Object.values(row).some(Boolean)||window.confirm("Remove this solution option?"))put("word_extra_options",extras.filter((_,j)=>i!==j));}}>Remove option {i+3}</button></td>{[["cost","Cost impact"],["programme","Programme impact"]].map(([k,l])=><td key={k}><label>{l}<textarea rows={3} maxLength={2000} value={row[k]||""} onChange={e=>changeExtra(i,k,e.target.value)}/></label></td>)}</tr>)}</tbody></table></div><div className="chips"><button type="button" disabled={extras.length>=10} onClick={()=>put("word_extra_options",[...extras,{solution:"",cost:"",programme:""}])}>＋ Add solution option</button><span className="note">{2+extras.length} options · up to 12 total</span></div>
   {area("options","Additional options and technical compliance")}
   <div className="tqGrid">{area("impact","Additional cost, resource and programme considerations")}{area("operations","Functional / operational implications")}</div>
   <h3>Part 3 — Contractor's proposed solution</h3>
