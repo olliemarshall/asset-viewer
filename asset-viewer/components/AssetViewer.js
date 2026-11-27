@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import SymbolFinder from "./SymbolFinder";
+import CalloffMasterLink from "./CalloffMasterLink";
 import AssetHighlight,{validRegion,centeredRegion} from "./AssetHighlight";
 import { useEffect, useRef, useState } from "react";
 import { extractFromPdf, STATUS_COLOURS, STATUS_ORDER } from "../lib/extract";
@@ -217,6 +218,7 @@ export default function AssetViewer({ context = null, initialPdf = null, onScrat
       host.current.replaceChildren(res.canvas);setRenderedCanvas(res.canvas);
       lastBuffer.current = { buffer, name };
       setExtracted(candidates); setRegion(res.region);setRegionBounds(res.regionBounds); setFileName(name); setHash(digest); setRecords(saved);
+      if(!reextracting&&sharedStore?.initialCalloffId)setSelected(sharedStore.initialCalloffId);
       setHidden([]); setDiscFilter(DISCIPLINES);
       if (!res.hasText) setError("This PDF has no searchable text. You can still add call-off circles manually.");
       else if (!res.assets.length) setError("No automatic candidates found. Use Add call-off to mark assets manually.");
@@ -571,6 +573,7 @@ export default function AssetViewer({ context = null, initialPdf = null, onScrat
             </div>
             </SidebarSection>
           </fieldset>
+          {sharedStore&&<CalloffMasterLink key={sel.id} store={{...sharedStore,onOpenRecord:sharedStore.onOpenRecord?record=>{if(!saving&&(!hasScratchChanges||window.confirm("Discard unsaved drawing call-off changes and open the engineering record?")))sharedStore.onOpenRecord(record);}:undefined}} calloff={sel} version={savedVersion} dirty={hasScratchChanges} disabled={busy||saving}/>}
             </div>
           </SidebarSection>
         ) : fileName && <p className="note">{canEdit?"Select a circle or choose Add call-off to place one.":"Select a circle to inspect its details."}</p>}
