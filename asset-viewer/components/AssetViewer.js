@@ -179,7 +179,7 @@ export default function AssetViewer({ context = null, initialPdf = null, onScrat
 
   async function load(buffer, name, reextracting = false) {
     if (activeLoad.current) return;
-    activeLoad.current = true; setSymbolMatches([]);setSymbolNotice("");setSymbolOpen(false);dragRef.current = null; panRef.current = null; setPanning(false); setDragPreview(null); setBusy(true); setError(""); setMode("select"); setSelected(null);
+    activeLoad.current = true; setHighlightStart(null);setHighlightPreview(null);setSymbolMatches([]);setSymbolNotice("");setSymbolOpen(false);dragRef.current = null; panRef.current = null; setPanning(false); setDragPreview(null); setBusy(true); setError(""); setMode("select"); setSelected(null);
     try {
       const digest = reextracting ? hash : await fingerprint(buffer);
       const res = await extractFromPdf(buffer.slice(0), { restrictToDrawing: restrict, regionMode });
@@ -556,7 +556,7 @@ export default function AssetViewer({ context = null, initialPdf = null, onScrat
             <label className="field">Asset type<select disabled={!canEdit} value={sel.type} onChange={e => update(sel.id,{type:e.target.value})}>{[...new Set(["unclassified", ...TYPES[sel.discipline], sel.type])].map(t => <option key={t} value={t}>{typeLabel(t)}</option>)}</select></label>
             <label className="field">Asset status<select disabled={!canEdit} value={safeStatus(sel.status)} onChange={e => { const status=e.target.value; update(sel.id,{status}); setHidden(h => h.filter(s => s !== status)); }}>{STATUS_ORDER.map(s => <option key={s} value={s}>{STATUS_COLOURS[s].label}</option>)}</select></label>
             </SidebarSection>
-            <p className="note">{validRegion(sel.highlight)?"Graphical region attached. Check that it contains only the intended asset.":"No graphical region attached; shown as a circle."}</p>
+            <p className="note">Blue glow is a graphical selection aid, not engineering or asset status.</p><p className="note">{validRegion(sel.highlight)?"Graphical region attached. Check that it contains only the intended asset.":"No graphical region attached; shown as a circle."}</p>
             {canEdit&&<div className="chips"><button type="button" onClick={()=>{setDisplayMode("glow");setHighlightStart(null);setHighlightPreview(null);setMode("highlight");}}> {validRegion(sel.highlight)?"Redefine highlight":"Define asset highlight"}</button>{validRegion(sel.highlight)&&<button type="button" onClick={()=>update(sel.id,{highlight:null})}>Clear highlight</button>}</div>}
             {canEdit&&<p className="note calloffDragHelp">Switch to circles to reposition markers. Moving a marker clears its graphical region.</p>}
             <div className="chips"><button type="button" disabled={!canEdit} onClick={removeSelected}>{sel.manual ? "Delete call-off" : "Dismiss candidate"}</button></div>
