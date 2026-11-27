@@ -526,6 +526,7 @@ export default function AssetViewer({ context = null, initialPdf = null, onScrat
         {storageError && <div className="error" role="alert">{storageError}</div>}
         <div className="viewerSidebarTitle"><div><h2>Call-offs <span>{assets.length}</span></h2><p className="note">{sharedStore?"Shared draft · engineering verification required":"Local drawing register"}</p></div></div>
         {saveMessage&&!hasScratchChanges&&<p className="note" role="status">{saveMessage}</p>}
+        {sharedStore?.initialCalloffId&&fileName&&!busy&&!assets.some(a=>a.id===sharedStore.initialCalloffId)&&<p className="note">The linked call-off is missing from this saved drawing draft. Inspect the master asset association.</p>}
         {sharedStore&&!savedVersion&&<p className="note">Automatic candidates are not saved until an editor saves the call-off draft.</p>}
         {symbolNotice&&<SidebarSection title={`Graphical review${symbolMatches.length?" ("+symbolMatches.length+")":""}`} open={sections.suggestions} onToggle={()=>toggleSection("suggestions")}><div className="symbolNotice"><p>{symbolNotice}</p>
           {!!symbolMatches.length&&<><p className="note">Dashed circles are temporary suggestions. Check for duplicates or non-equipment graphics.</p><div className="chips"><button onClick={()=>{if(window.confirm("Add all "+symbolMatches.length+" suggestions as unverified call-offs? Check them for duplicates and false matches."))acceptSymbols(symbolMatches);}}>Add all for review</button><button onClick={()=>{setSymbolMatches([]);setSymbolNotice("");}}>Clear suggestions</button></div></>}
@@ -573,7 +574,7 @@ export default function AssetViewer({ context = null, initialPdf = null, onScrat
             </div>
             </SidebarSection>
           </fieldset>
-          {sharedStore&&<CalloffMasterLink key={sel.id} store={{...sharedStore,onOpenRecord:sharedStore.onOpenRecord?record=>{if(!saving&&(!hasScratchChanges||window.confirm("Discard unsaved drawing call-off changes and open the engineering record?")))sharedStore.onOpenRecord(record);}:undefined}} calloff={sel} version={savedVersion} dirty={hasScratchChanges} disabled={busy||saving}/>}
+          {sharedStore&&<CalloffMasterLink key={sel.id} store={{...sharedStore,onOpenAsset:sharedStore.onOpenAsset?asset=>{if(!saving&&(!hasScratchChanges||window.confirm("Discard unsaved drawing call-off changes and open the master asset?")))sharedStore.onOpenAsset(asset);}:undefined,onOpenRecord:sharedStore.onOpenRecord?record=>{if(!saving&&(!hasScratchChanges||window.confirm("Discard unsaved drawing call-off changes and open the engineering record?")))sharedStore.onOpenRecord(record);}:undefined}} calloff={sel} version={savedVersion} dirty={hasScratchChanges} disabled={busy||saving}/>}
             </div>
           </SidebarSection>
         ) : fileName && <p className="note">{canEdit?"Select a circle or choose Add call-off to place one.":"Select a circle to inspect its details."}</p>}
