@@ -405,3 +405,15 @@ button.managementCard { display:flex; flex-direction:column; align-items:flex-st
 .attachmentRow a { flex-shrink:0; }
 @media(max-width:1150px){.idcQuick{grid-template-columns:repeat(3,minmax(0,1fr));}}
 @media(max-width:650px){.idcQuick{grid-template-columns:1fr;}.idcMinutes{padding:10px;}}
+
+/* Master asset links and revision-specific observations */
+.masterCalloff,.assetRelations { display:flex; flex-direction:column; gap:10px; min-width:0; overflow-wrap:anywhere; }
+.masterCalloff { border-top:1px solid var(--line); padding:12px 0 4px; }
+.masterCalloff .assetRelations { padding:10px; border:1px solid var(--line); border-radius:7px; }
+.assetRelations details { border-top:1px solid var(--line); padding-top:9px; }
+.assetRelations summary,.masterCalloff summary { cursor:pointer; font-weight:650; font-size:13px; }
+.assetRelationRow { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; padding:10px 0; border-bottom:1px solid var(--line); }
+.assetRelationRow > div:first-child { flex:1; min-width:0; }
+.assetRelationRow p,.assetRelations p { margin:4px 0; }
+.assetNote { white-space:pre-wrap; font-size:13px; }
+.masterCalloff .assetRelationRow { flex-wrap:wrap; font-size:12px; }

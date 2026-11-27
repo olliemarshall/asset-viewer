@@ -16,7 +16,7 @@ async function validate(file){
   return {buffer,hash:await sha(buffer)};
 }
 function assertResult(result){if(result.error)throw result.error;return result.data;}
-export default function DrawingRegister({db,user,scheme,project,canUpload,onClose}){
+export default function DrawingRegister({db,user,scheme,project,canUpload,onClose,initialDrawing,onOpenRecord,onOpenAsset}){
   const [drawings,setDrawings]=useState([]),[draft,setDraft]=useState(empty);
   const [file,setFile]=useState(null),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false);
   const [error,setError]=useState(""),[notice,setNotice]=useState(""),[opened,setOpened]=useState(null);
@@ -50,6 +50,7 @@ export default function DrawingRegister({db,user,scheme,project,canUpload,onClos
     else if(to)assertResult(await db.from("drawing_folder_locations").insert({drawing_id:row.id,scheme_id:scheme.id,folder_id:to}).select("drawing_id").single());
   }
   const [scratchChanged,setScratchChanged]=useState(false);
+  const initialOpened=useRef(false);
   const input=useRef(null),live=useRef(true),working=useRef(false);
   useEffect(()=>{live.current=true;return()=>{live.current=false;};},[]);
   async function refresh(){
@@ -124,9 +125,10 @@ export default function DrawingRegister({db,user,scheme,project,canUpload,onClos
       if(live.current){setScratchChanged(false);setOpened({row,buffer,snapshot});}
     });
   }
+  useEffect(()=>{if(!loading&&!busy&&initialDrawing&&!initialOpened.current){initialOpened.current=true;const row=drawings.find(d=>d.id===initialDrawing.drawingId&&d.upload_status==="ready");if(row)open(row);else setError("Linked drawing is unavailable.");}},[loading,busy,drawings,initialDrawing]);
   if(opened)return <div className="sharedDrawingOverlay">
     <div className="sharedDrawingBanner"><button onClick={()=>{if(!scratchChanged||window.confirm("You have unsaved call-off edits. Discard changes and close this drawing?")){setOpened(null);setScratchChanged(false);}}}>← Drawing register</button><span>{project.name} / {scheme.name} / {opened.row.reference} · Rev {opened.row.revision}</span><span>Shared drawing · saved call-offs are visible to authorised project members</span></div>
-    <AssetViewer key={opened.row.id} context={{scope:"shared:"+user.id+":"+opened.row.id,title:opened.row.title+" · Rev "+opened.row.revision,shared:true}} initialPdf={{buffer:opened.buffer,name:opened.row.filename}} onScratchChange={setScratchChanged} sharedStore={{db,drawingId:opened.row.id,canEdit:canUpload,snapshot:opened.snapshot}}/>
+    <AssetViewer key={opened.row.id} context={{scope:"shared:"+user.id+":"+opened.row.id,title:opened.row.title+" · Rev "+opened.row.revision,shared:true}} initialPdf={{buffer:opened.buffer,name:opened.row.filename}} onScratchChange={setScratchChanged} sharedStore={{db,drawingId:opened.row.id,schemeId:scheme.id,projectId:project.id,canEdit:canUpload,snapshot:opened.snapshot,initialCalloffId:initialDrawing?.drawingId===opened.row.id?initialDrawing.calloffId:null,onOpenRecord,onOpenAsset}}/>
   </div>;
   return <section className="drawingRegister">
     <div className="swSectionHeader"><h2>Drawing register</h2><div className="chips">{canUpload&&<button className="swPrimary" disabled={busy} onClick={()=>{setRetry(null);setUploadOpen(v=>!v);setFile(null);}}>{uploadOpen?"Cancel upload":"＋ Upload drawing"}</button>}<button disabled={busy} onClick={onClose}>Back to schemes</button></div></div>
