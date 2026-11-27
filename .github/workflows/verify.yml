@@ -1,0 +1,25 @@
+name: Verify SchemeWorks
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: asset-viewer
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      # No committed lockfile yet. Replace with npm ci when verified.
+      - run: npm install --no-audit --no-fund
+      - run: npm test
+      - run: npm run build
+      - name: Dependency advisory report (not yet a release gate)
+        run: npm audit --audit-level=high
+        continue-on-error: true
