@@ -5,6 +5,7 @@ import AssuranceWorkspace from "../../components/AssuranceWorkspace";
 import DocumentTemplates from "../../components/DocumentTemplates";
 import EngineeringManagement from "../../components/EngineeringManagement";
 import Trackers from "../../components/Trackers";
+import MyWorkspace from "../../components/MyWorkspace";
 import ProjectEngineeringTeam from "../../components/ProjectEngineeringTeam";
 import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
@@ -95,8 +96,9 @@ function Portfolio({user}){
   const [projectId,setProjectId]=useState("");
   const [schemeId,setSchemeId]=useState("");
   const [projectTab,setProjectTab]=useState("schemes");
+  const [personal,setPersonal]=useState(false);
   const [initialRecord,setInitialRecord]=useState(null);
-  function openAssuranceRecord(record){setInitialRecord({id:record.id,kind:record.kind});setProjectTab("assurance");cancelForm();}
+  function openAssuranceRecord(record){const target=projects.find(p=>p.id===record.project_id);if(target){setOrgId(target.organisation_id);setProjectId(target.id);setSchemeId("");}setPersonal(false);setInitialRecord({id:record.id,kind:record.kind});setProjectTab("assurance");cancelForm();}
   const [orgName,setOrgName]=useState("");
   const [projectDraft,setProjectDraft]=useState(emptyProject);
   const [schemeDraft,setSchemeDraft]=useState(emptyScheme);
@@ -159,8 +161,8 @@ function Portfolio({user}){
     if(!window.confirm((status==="archived"?"Archive ":"Restore ")+item.name+"?"))return;
     write(()=>db.from(table).update({status}).eq("id",item.id).select("id").single());
   }
-  function chooseOrg(id){setInitialRecord(null);setProjectTab("schemes");setSearch("");setForm(null);setOrgId(id);setProjectId("");setSchemeId("");setEditingProject(null);setProjectDraft(emptyProject);setEditingScheme(null);setSchemeDraft(emptyScheme);}
-  function chooseProject(id){setInitialRecord(null);setProjectTab("schemes");setSearch("");setForm(null);setProjectId(id);setSchemeId("");setEditingScheme(null);setSchemeDraft(emptyScheme);}
+  function chooseOrg(id){setPersonal(false);setInitialRecord(null);setProjectTab("schemes");setSearch("");setForm(null);setOrgId(id);setProjectId("");setSchemeId("");setEditingProject(null);setProjectDraft(emptyProject);setEditingScheme(null);setSchemeDraft(emptyScheme);}
+  function chooseProject(id){setPersonal(false);setInitialRecord(null);setProjectTab("schemes");setSearch("");setForm(null);setProjectId(id);setSchemeId("");setEditingScheme(null);setSchemeDraft(emptyScheme);}
   const matches=item=>[item.name,item.reference,item.description,item.location].some(v=>String(v||"").toLowerCase().includes(search.trim().toLowerCase()));
   const orgProjects=projects.filter(p=>p.organisation_id===orgId);
   const projectSchemes=schemes.filter(s=>s.project_id===project?.id);
@@ -177,22 +179,22 @@ function Portfolio({user}){
       <div className="swNavLabel">WORKSPACE</div>
       <label className="field">Organisation<select value={orgId} onChange={e=>chooseOrg(e.target.value)} disabled={busy}><option value="">Select organisation</option>{orgs.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}</select></label>
       <button className="swNavLink" disabled={busy} onClick={()=>{chooseProject("");setForm("organisation");}}>＋ New organisation</button>
-      <div className="swNavLabel">PORTFOLIO</div>
-      <button className={"swNavLink"+(!project?" active":"")} disabled={busy} onClick={()=>chooseProject("")}>▦ All projects</button>
+      <div className="swNavLabel">PORTFOLIO</div><button className={"swNavLink"+(personal?" active":"")} disabled={busy} onClick={()=>{chooseProject("");setPersonal(true);}}>◉ My workspace</button>
+      <button className={"swNavLink"+(!project&&!personal?" active":"")} disabled={busy} onClick={()=>chooseProject("")}>▦ All projects</button>
       {orgProjects.filter(p=>p.status==="active"||showArchived||p.id===projectId).map(p=><button key={p.id} title={p.name} className={"swNavLink swNavProject"+(p.id===projectId?" active":"")} disabled={busy} onClick={()=>chooseProject(p.id)}><span>▰</span><span>{p.name}</span></button>)}
       <div className="swNavFoot"><span className="note">{org?(admin?"Organisation administrator":"Organisation member"):"No organisation selected"}</span><Link href="/projects">Standalone prototype ↗</Link></div>
     </aside>
     <main className="swMain">
       <nav className="swBreadcrumb" aria-label="Breadcrumb"><button disabled={busy} onClick={()=>chooseProject("")}>Projects</button>{project&&<><span>›</span><button disabled={busy} onClick={()=>chooseScheme("")}>{project.name}</button></>}{scheme&&<><span>›</span><span aria-current="page">{scheme.name}</span></>}</nav>
       <div className="swHeading">
-        <div><div className="workspaceEyebrow">{scheme?"SCHEME WORKSPACE":project?"PROJECT WORKSPACE":"PROJECT PORTFOLIO"}</div>
-          <h1 className="workspaceTitle">{scheme?.name||project?.name||"Projects"}</h1>
+        <div><div className="workspaceEyebrow">{personal?"PERSONAL WORKSPACE":scheme?"SCHEME WORKSPACE":project?"PROJECT WORKSPACE":"PROJECT PORTFOLIO"}</div>
+          <h1 className="workspaceTitle">{personal?"My workspace":scheme?.name||project?.name||"Projects"}</h1>
           <p className="workspaceLead">{scheme?scheme.reference+(scheme.location?" · "+scheme.location:""):project?project.reference+" · "+(project.description||"Engineering schemes"):"Manage your engineering projects, schemes and drawings."}</p>
         </div>
         <div className="swHeadingActions">
           {!scheme&&project&&projectTab==="schemes"&&canEditScheme&&project.status==="active"&&<button className="swPrimary" disabled={busy} onClick={newScheme}>＋ New scheme</button>}
-          {!project&&org&&admin&&<button className="swPrimary" disabled={busy} onClick={newProject}>＋ New project</button>}
-          {!org&&<button className="swPrimary" disabled={busy} onClick={()=>setForm("organisation")}>＋ New organisation</button>}
+          {!personal&&!project&&org&&admin&&<button className="swPrimary" disabled={busy} onClick={newProject}>＋ New project</button>}
+          {!personal&&!org&&<button className="swPrimary" disabled={busy} onClick={()=>setForm("organisation")}>＋ New organisation</button>}
           <button disabled={busy||loading} onClick={()=>setRevision(n=>n+1)}>Refresh</button>
         </div>
       </div>
@@ -208,7 +210,7 @@ function Portfolio({user}){
         </form>:<p className="note">You do not have permission to edit this record.</p>}
       </section>}
       {project&&!scheme&&<nav className="assuranceTabs" aria-label="Project sections">{[["schemes","Schemes"],["assurance","Engineering assurance"],["templates","Document templates"],["management","Engineering management"],["trackers","Trackers"],["team","Engineering team"]].map(([k,label])=><button key={k} className={projectTab===k?"active":""} onClick={()=>{setInitialRecord(null);setProjectTab(k);cancelForm();}}>{label}</button>)}</nav>}
-      {loading?<p className="swEmpty">Loading shared records…</p>:project&&!scheme&&projectTab==="assurance"?<AssuranceWorkspace key={project.id+":"+(initialRecord?.id||"")} db={db} project={project} initialRecord={initialRecord} canEdit={canEditScheme&&project.status==="active"}/>:project&&!scheme&&projectTab==="templates"?<DocumentTemplates key={project.id} db={db} project={project} canEdit={canEditScheme&&project.status==="active"} onOpenRecord={openAssuranceRecord}/>:project&&!scheme&&projectTab==="management"?<EngineeringManagement key={project.id} db={db} project={project} onOpenRecord={openAssuranceRecord}/>:project&&!scheme&&projectTab==="trackers"?<Trackers key={project.id} db={db} project={project} onOpenRecord={openAssuranceRecord}/>:project&&!scheme&&projectTab==="team"?<ProjectEngineeringTeam key={project.id} db={db} project={project} admin={admin}/>:scheme?<DrawingRegister key={scheme.id} db={db} user={user} scheme={scheme} project={project} canUpload={canEditScheme&&project.status==="active"&&scheme.status==="active"} onClose={()=>chooseScheme("")}/>:org?<>
+      {loading?<p className="swEmpty">Loading shared records…</p>:personal?<MyWorkspace db={db} user={user} projects={projects} onOpenRecord={openAssuranceRecord}/>:project&&!scheme&&projectTab==="assurance"?<AssuranceWorkspace key={project.id+":"+(initialRecord?.id||"")} db={db} project={project} initialRecord={initialRecord} canEdit={canEditScheme&&project.status==="active"}/>:project&&!scheme&&projectTab==="templates"?<DocumentTemplates key={project.id} db={db} project={project} canEdit={canEditScheme&&project.status==="active"} onOpenRecord={openAssuranceRecord}/>:project&&!scheme&&projectTab==="management"?<EngineeringManagement key={project.id} db={db} project={project} onOpenRecord={openAssuranceRecord}/>:project&&!scheme&&projectTab==="trackers"?<Trackers key={project.id} db={db} project={project} onOpenRecord={openAssuranceRecord}/>:project&&!scheme&&projectTab==="team"?<ProjectEngineeringTeam key={project.id} db={db} project={project} admin={admin}/>:scheme?<DrawingRegister key={scheme.id} db={db} user={user} scheme={scheme} project={project} canUpload={canEditScheme&&project.status==="active"&&scheme.status==="active"} onClose={()=>chooseScheme("")}/>:org?<>
         <div className="swStats">
           <div><span>{project?"Active schemes":"Active projects"}</span><strong>{(project?projectSchemes:orgProjects).filter(x=>x.status==="active").length}</strong></div>
           <div><span>{project?"Archived schemes":"Archived projects"}</span><strong>{(project?projectSchemes:orgProjects).filter(x=>x.status==="archived").length}</strong></div>
