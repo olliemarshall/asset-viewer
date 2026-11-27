@@ -1,5 +1,5 @@
 # SchemeWorks development and governance
-This branch is an independent draft from main (PR13). Do not merge or apply its migration to the shared database until PR14 is reviewed and the migration and frontend are tested together. Prefer merge PR14 first, then rebase PR15 and resolve overlapping assurance component changes. The governance migration installs master-asset audit triggers when those tables already exist; if applied in the opposite order, a follow-up migration is required.
+This draft now incorporates merged PR14. Do not merge or apply its governance migration to the shared database until the migration and frontend are tested together in staging. The migration includes master-asset audit triggers when those tables exist.
 
 ## Windows local development (Node 22 + Git + VS Code)
 1. Install Git and Node.js 22 LTS. Clone the repository using your authorised GitHub account.
@@ -21,6 +21,7 @@ npm run dev
 
 ## Security and governance scope
 - The admin-only project audit viewer captures row changes after activation, including membership, documents and assurance workflow decisions. For assurance records it captures before/after data; for large drawing payloads, template content and native originals it records metadata/version, not their contents. No history backfill. Audit entries are protected from ordinary application clients, not from database administrators. No read/download logs or independent tamper-evident archive yet. Agree retention, access and backups before real use.
+- Project Management is an additional read-only designation: it grants viewer membership, never internal review permission, and cannot be selected as an engineering assignee or reviewer. An administrator must change the designation before granting editor access. Organisation administrators cannot be enrolled as read-only Project Management members because their inherited rights take precedence.
 - Organisation administrators can downgrade or revoke explicit project membership. RLS evaluates membership on subsequent API requests; files already downloaded cannot be recalled. Organisation-wide admins remain privileged. Disabling a roster entry is distinct from revocation. Existing assignments and review history remain visible to authorised users. Re-enable roster/review permission separately after restoring an editor.
 - Appointment attachments are restricted to organisation administrators, not all project members. Appointment record fields remain project-visible. Do not store confidential competence information in those fields. A dedicated competence-evidence ACL and lifecycle is still required.
 - New TQ/variation reviews store the exact saved record and ready attachment metadata/fingerprints. Adding ready evidence advances the version, superseding prior reviews. Older review decisions remain historical; legacy pending reviews need a new record version. File hashes are checked by the client, not verified server-side against object bytes. External document URLs are references, not controlled copies. Asset associations, template versions and formal issue/export files are not yet part of the review snapshot. Independent review checks requester and last editor, not every prior contributor.
@@ -29,7 +30,7 @@ npm run dev
 
 ## Release checklist
 - PR14 + PR15 integrated build and browser test.
-- Test three separate accounts (administrator, editor, viewer), an unrelated organisation and revocation while signed in.
+- Test four separate accounts (administrator, editor, viewer, Project Management), an unrelated organisation and revocation while signed in.
 - Test private Storage uploads/downloads, attachment review invalidation, and signed-link lifetime; confirm that historical reviews display correctly.
 - Review dependency advisories and commit a verified npm lockfile; then change CI to npm ci.
 - Run database security advisors and backup/restore tests on staging. Agree formal document issue/revision, approval scope, audit retention, role-specific permissions and recovery requirements before accepting real project data.
