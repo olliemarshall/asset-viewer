@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import SymbolFinder from "./SymbolFinder";
+import AssetHighlight,{validRegion,centeredRegion} from "./AssetHighlight";
 import { useEffect, useRef, useState } from "react";
 import { extractFromPdf, STATUS_COLOURS, STATUS_ORDER } from "../lib/extract";
 
@@ -36,6 +37,8 @@ function cleanPatch(p) {
   if (Array.isArray(p.links)) out.links = safeLinks(p.links);
   if (validPoint(p)) { out.x = p.x; out.y = p.y; }
   if (p.dismissed === true) out.dismissed = true;
+  if (validRegion(p.highlight)) out.highlight = {left:p.highlight.left,top:p.highlight.top,right:p.highlight.right,bottom:p.highlight.bottom};
+  if(p.highlight===null)out.highlight=null;
   if (p.source === "symbol") out.source = "symbol";
   if (typeof p.symbolRef === "string") out.symbolRef = p.symbolRef;
   if (Number.isFinite(p.similarity) && p.similarity >= 0 && p.similarity <= 1) out.similarity = p.similarity;
@@ -98,7 +101,10 @@ export default function AssetViewer({ context = null, initialPdf = null, onScrat
   const [saveMessage,setSaveMessage]=useState("");
   const [saveError,setSaveError]=useState("");
   const [sidebarOpen,setSidebarOpen]=useState(true);
-  const [showMarkers,setShowMarkers]=useState(true);
+  const [displayMode,setDisplayMode]=useState("glow");
+  const [highlightStart,setHighlightStart]=useState(null);
+  const [highlightPreview,setHighlightPreview]=useState(null);
+  const [renderedCanvas,setRenderedCanvas]=useState(null);
   const [settingsOpen,setSettingsOpen]=useState(false);
   const [assetSearch,setAssetSearch]=useState("");
   const canEdit=!context?.shared||!!sharedStore?.canEdit;
@@ -163,7 +169,7 @@ export default function AssetViewer({ context = null, initialPdf = null, onScrat
     const cancel = e => {
       if (e.key !== "Escape") return;
       if (dragRef.current) { dragRef.current = null; setDragPreview(null); return; }
-      if (mode !== "select") { setMode("select"); return; }
+      if (mode !== "select") { setMode("select");setHighlightStart(null);setHighlightPreview(null); return; }
       setSelected(null);
       setLinkTitle(""); setLinkUrl("");
     };
@@ -173,7 +179,7 @@ export default function AssetViewer({ context = null, initialPdf = null, onScrat
 
   async function load(buffer, name, reextracting = false) {
     if (activeLoad.current) return;
-    activeLoad.current = true; setSymbolMatches([]);setSymbolNotice("");setSymbolOpen(false);dragRef.current = null; panRef.current = null; setPanning(false); setDragPreview(null); setBusy(true); setError(""); setMode("select"); setSelected(null);
+    activeLoad.current = true; setHighlightStart(null);setHighlightPreview(null);setSymbolMatches([]);setSymbolNotice("");setSymbolOpen(false);dragRef.current = null; panRef.current = null; setPanning(false); setDragPreview(null); setBusy(true); setError(""); setMode("select"); setSelected(null);
     try {
       const digest = reextracting ? hash : await fingerprint(buffer);
       const res = await extractFromPdf(buffer.slice(0), { restrictToDrawing: restrict, regionMode });
@@ -208,7 +214,7 @@ export default function AssetViewer({ context = null, initialPdf = null, onScrat
         for(const a of candidates)if(!combined.has(a.label))combined.set(a.label,a);
         candidates=[...combined.values()];
       }
-      host.current.replaceChildren(res.canvas);
+      host.current.replaceChildren(res.canvas);setRenderedCanvas(res.canvas);
       lastBuffer.current = { buffer, name };
       setExtracted(candidates); setRegion(res.region);setRegionBounds(res.regionBounds); setFileName(name); setHash(digest); setRecords(saved);
       setHidden([]); setDiscFilter(DISCIPLINES);
@@ -238,10 +244,12 @@ export default function AssetViewer({ context = null, initialPdf = null, onScrat
 
   function update(id, patch) {
     if(!canEdit||saving)return;
+    // Moving a call-off does not move the underlying PDF ink. Rebind its shape.
+    if(validPoint(patch)&&!Object.hasOwn(patch,"highlight"))patch={...patch,highlight:null};
     const bucket = id.startsWith("manual:") ? "manual" : "overrides";
     setRecords(r => ({ ...r, [bucket]: { ...r[bucket], [id]: { ...r[bucket][id], ...patch } } }));
   }
-  function selectAsset(id) { setSelected(id); if(id){openSection("editor");setSidebarOpen(true);} setMode("select"); setLinkTitle(""); setLinkUrl(""); }
+  function selectAsset(id) { setSelected(id); if(id){openSection("editor");setSidebarOpen(true);}setHighlightStart(null);setHighlightPreview(null); setMode("select"); setLinkTitle(""); setLinkUrl(""); }
   function reveal(a) {
     setHidden(h => h.filter(s => s !== a.status));
     setDiscFilter(d => d.includes(a.discipline) ? d : [...d, a.discipline]);
@@ -253,12 +261,24 @@ export default function AssetViewer({ context = null, initialPdf = null, onScrat
     if (!rect || !rect.width || !rect.height) return;
     const point = { x:(e.clientX-rect.left)/rect.width, y:(e.clientY-rect.top)/rect.height };
     if (!validPoint(point)) return;
+    if (mode === "highlight" && sel) {
+      if(!highlightStart){setHighlightStart(point);return;}
+      const b={left:Math.min(point.x,highlightStart.x),top:Math.min(point.y,highlightStart.y),right:Math.max(point.x,highlightStart.x),bottom:Math.max(point.y,highlightStart.y)};
+      if(!validRegion(b))return;
+      update(sel.id,{x:(b.left+b.right)/2,y:(b.top+b.bottom)/2,highlight:b});setHighlightStart(null);setHighlightPreview(null);setMode("select");setDisplayMode("glow");return;
+    }
     if (mode === "add") {
       const id = "manual:" + crypto.randomUUID();
       const a = { ...point, id, manual: true, label: "Untitled call-off", type: "unclassified", discipline: "Unassigned", status: "REVIEW" };
       setRecords(r => ({ ...r, manual: { ...r.manual, [id]: a } }));
       reveal(a); selectAsset(id);
     }
+  }
+  function previewHighlight(e){
+    if(mode!=="highlight"||!highlightStart)return;
+    const r=host.current?.getBoundingClientRect();if(!r?.width||!r.height)return;
+    const x=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)),y=Math.max(0,Math.min(1,(e.clientY-r.top)/r.height));
+    setHighlightPreview({left:Math.min(x,highlightStart.x),top:Math.min(y,highlightStart.y),right:Math.max(x,highlightStart.x),bottom:Math.max(y,highlightStart.y)});
   }
   // A background drag scrolls the viewer. Marker drags stop propagation.
   function startPan(e) {
@@ -372,7 +392,7 @@ export default function AssetViewer({ context = null, initialPdf = null, onScrat
     for(const m of matches){
       const id="manual:"+crypto.randomUUID();
       additions[id]={id,manual:true,source:"symbol",label:"Unlabelled "+typeLabel(m.type),type:safeType(m.type),
-        discipline:"Signalling",status:"REVIEW",x:m.x,y:m.y,symbolRef:m.symbolRef,similarity:m.score};
+        discipline:"Signalling",status:"REVIEW",x:m.x,y:m.y,symbolRef:m.symbolRef,similarity:m.score,highlight:centeredRegion(m.x,m.y,m.width,m.height)};
     }
     setRecords(r=>({...r,manual:{...r.manual,...additions}}));
     const accepted=new Set(matches.map(m=>m.id));
@@ -454,13 +474,13 @@ export default function AssetViewer({ context = null, initialPdf = null, onScrat
         {fileName && canEdit && <>
           <button onClick={reextract} disabled={busy||saving}>Re-extract</button>
           <button disabled={busy||saving} onClick={()=>{setMode("select");setSymbolOpen(true);}}>Find symbols (beta)</button>
-          <button className={mode === "add" ? "calloffActive" : ""} aria-pressed={mode === "add"} disabled={busy||saving} onClick={() => {setShowMarkers(true);setMode(m => m === "add" ? "select" : "add");}}>＋ Add call-off</button>
-          {mode !== "select" && <button onClick={() => setMode("select")}>Cancel (Esc)</button>}
+          <button className={mode === "add" ? "calloffActive" : ""} aria-pressed={mode === "add"} disabled={busy||saving} onClick={() => {setDisplayMode("circles");setHighlightStart(null);setHighlightPreview(null);setMode(m => m === "add" ? "select" : "add");}}>＋ Add call-off</button>
+          {mode !== "select" && <button onClick={() => {setMode("select");setHighlightStart(null);setHighlightPreview(null);}}>Cancel (Esc)</button>}
         </>}
         <span style={{flex:1}} />
         <button onClick={() => setZoom(z => Math.max(50,z-25))}>−</button><span className="note">{zoom}%</span><button onClick={() => setZoom(z => Math.min(1200,z+25))}>+</button>
         <button onClick={()=>setZoom(100)} title="Fit drawing width">Fit width</button>
-        <button aria-pressed={showMarkers} onClick={()=>setShowMarkers(v=>!v)}>{showMarkers?"Hide circles":"Show circles"}</button>
+        <label className="viewerDisplay">Display <select aria-label="Drawing display mode" value={displayMode} onChange={e=>{setMode("select");setHighlightStart(null);setHighlightPreview(null);setDisplayMode(e.target.value);}}><option value="glow">Asset highlights</option><option value="circles">Call-off circles</option><option value="original">Original PDF</option></select></label>
         <button aria-expanded={sidebarOpen} onClick={()=>setSidebarOpen(v=>!v)}>{sidebarOpen?"Hide sidebar":"Show sidebar"}</button>
         {sharedStore&&<div className="viewerSaveGroup">
           <span role="status" className="note">{saving?"Saving…":hasScratchChanges?"Unsaved changes":savedVersion?"Shared draft · v"+savedVersion:"Not saved yet"}{!canEdit?" · Read only":""}</span>
@@ -473,9 +493,12 @@ export default function AssetViewer({ context = null, initialPdf = null, onScrat
         {!fileName && !busy && <p className="note">{context?.shared ? "Opening stored PDF… If loading fails, close the viewer and reopen the drawing." : "Open a PDF drawing you are permitted to use. You can add call-offs even when no automatic assets are detected."}</p>}
         {busy && <p className="note">Reading plan…</p>}
         {mode === "add" && <div className="calloffHint" role="status">Click the drawing to place a new call-off circle.</div>}
-        <div className={"stage" + (mode !== "select" ? " placing" : "")} style={{width:`${zoom}%`}} onClick={planClick}>
+        {mode==="highlight"&&<div className="calloffHint" role="status">{highlightStart?"Click the opposite corner of the equipment.":"Click the first corner of a tight rectangle around the equipment."}</div>}
+        <div className={"stage" + (mode !== "select" ? " placing" : "")} style={{width:`${zoom}%`}} onClick={planClick} onPointerMove={previewHighlight}>
           <div ref={host} />
-          {showMarkers&&visible.map(a => {
+          {highlightPreview&&mode==="highlight"&&<div className="assetRegionPreview" style={{left:highlightPreview.left*100+"%",top:highlightPreview.top*100+"%",width:(highlightPreview.right-highlightPreview.left)*100+"%",height:(highlightPreview.bottom-highlightPreview.top)*100+"%"}}/>}
+          {displayMode==="glow"&&mode==="select"&&visible.filter(a=>validRegion(a.highlight)).map(a=><AssetHighlight key={a.id} canvas={renderedCanvas} region={a.highlight} label={a.label||"Untitled call-off"} selected={a.id===selected} disabled={busy||saving} onSelect={()=>selectAsset(a.id)}/>)}
+          {displayMode!=="original"&&visible.filter(a=>displayMode==="circles"||!validRegion(a.highlight)).map(a => {
             const moving = dragPreview?.id === a.id;
             const point = moving ? dragPreview : a;
             return (
@@ -491,7 +514,7 @@ export default function AssetViewer({ context = null, initialPdf = null, onScrat
                 disabled={busy || saving || mode !== "select"} />
             );
           })}
-          {showMarkers&&mode==="select"&&symbolMatches.map(m=><button type="button" key={m.id} className="marker symbolCandidate" title={`${typeLabel(m.type)} • shape score ${Math.round(m.score*100)}% • click to add for review`}
+          {displayMode!=="original"&&mode==="select"&&symbolMatches.map(m=><button type="button" key={m.id} className="marker symbolCandidate" title={`${typeLabel(m.type)} • shape score ${Math.round(m.score*100)}% • click to add for review`}
             aria-label={`Add suggested ${typeLabel(m.type)} for review`} style={{left:m.x*100+"%",top:m.y*100+"%"}}
             onClick={e=>{e.stopPropagation();acceptSymbols([m]);}}/>)}
         </div>
@@ -533,7 +556,9 @@ export default function AssetViewer({ context = null, initialPdf = null, onScrat
             <label className="field">Asset type<select disabled={!canEdit} value={sel.type} onChange={e => update(sel.id,{type:e.target.value})}>{[...new Set(["unclassified", ...TYPES[sel.discipline], sel.type])].map(t => <option key={t} value={t}>{typeLabel(t)}</option>)}</select></label>
             <label className="field">Asset status<select disabled={!canEdit} value={safeStatus(sel.status)} onChange={e => { const status=e.target.value; update(sel.id,{status}); setHidden(h => h.filter(s => s !== status)); }}>{STATUS_ORDER.map(s => <option key={s} value={s}>{STATUS_COLOURS[s].label}</option>)}</select></label>
             </SidebarSection>
-            {canEdit&&<p className="note calloffDragHelp">Drag the circle on the drawing. For fine adjustment, focus the circle and use the arrow keys (Shift for larger steps).</p>}
+            <p className="note">Blue glow is a graphical selection aid, not engineering or asset status.</p><p className="note">{validRegion(sel.highlight)?"Graphical region attached. Check that it contains only the intended asset.":"No graphical region attached; shown as a circle."}</p>
+            {canEdit&&<div className="chips"><button type="button" onClick={()=>{setDisplayMode("glow");setHighlightStart(null);setHighlightPreview(null);setMode("highlight");}}> {validRegion(sel.highlight)?"Redefine highlight":"Define asset highlight"}</button>{validRegion(sel.highlight)&&<button type="button" onClick={()=>update(sel.id,{highlight:null})}>Clear highlight</button>}</div>}
+            {canEdit&&<p className="note calloffDragHelp">Switch to circles to reposition markers. Moving a marker clears its graphical region.</p>}
             <div className="chips"><button type="button" disabled={!canEdit} onClick={removeSelected}>{sel.manual ? "Delete call-off" : "Dismiss candidate"}</button></div>
             <SidebarSection title="Owner and notes" open={sections.notes} onToggle={()=>toggleSection("notes")}>
             <label className="field">Owner<input readOnly={!canEdit} value={sel.owner || ""} onChange={e => update(sel.id,{owner:e.target.value})} /></label>

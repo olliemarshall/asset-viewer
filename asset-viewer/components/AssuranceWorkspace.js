@@ -1,0 +1,92 @@
+"use client";
+import {useEffect,useState,useRef} from "react";
+
+// SchemeWorks working drafts, not copies of controlled Network Rail forms.
+const KINDS={
+ tq:{name:"Technical queries",clause:"13.2",form:"F0049",fields:[["question","Technical issue / conflict / AFC change"],["options","Options and technical compliance"],["impact","Cost, resource, time and programme impacts"],["operations","Functional and operational implications"],["response","Response / evidence"],["instruction","Separate instruction reference (if applicable)"]]},
+ rfi:{name:"Requests for information",clause:"13.3",form:"F0052",fields:[["question","Information missing or clarification required"],["response","Response / evidence"]]},
+ variation:{name:"Variations",clause:"12",form:"",fields:[["standard","Standard and clause"],["proposal","Proposed departure"],["mitigation","Risk assessment and mitigation reference"],["decision","Formal variation decision / evidence reference"]]},
+ idr:{name:"IDR issues and actions",clause:"15.4",form:"F0045B",fields:[["deliverable","Deliverable / revision"],["meeting","Review date / certificate reference"],["issue","Interface issue or action"],["resolution","Resolution / closure evidence"],["waiver","DPE waiver reference, where applicable"]]},
+ idc:{name:"Interdisciplinary checks",clause:"15.3",form:"F0046",fields:[["deliverable","Deliverable / revision"],["meeting","Check meeting / attendees"],["issue","Comments and actions"],["resolution","Closure evidence"],["certificate","Signed certificate reference"]]},
+ deliverable:{name:"Engineering deliverables",clause:"15.1, 15.7",form:"F0044",fields:[["revision","Deliverable revision"],["scope","CR-T / baseline scope"],["discipline","Discipline"],["review","Review category / evidence"],["idc","IDC / IDR references"],["approval","Technical approval evidence, if applicable"],["acceptance","Technical acceptance / DRN reference"]]},
+ appointment:{name:"Engineering appointments",clause:"10.1",form:"F0042 / F0053 and applicable appointment form",fields:[["person","Appointee"],["role","Engineering role"],["scope","Discipline and scope"],["competence","Competence evidence reference"],["mitigation","Mentoring / supervision arrangements"],["acceptance","Signed appointment and acceptance reference"],["review","Next review / withdrawal details"]]},
+ hazard:{name:"Hazard records",clause:"5.2.4",form:"",fields:[["hazard","Hazard / affected interface"],["consequence","Potential consequence"],["control","Controls and residual risk"],["evidence","Assessment and transfer evidence"]]},
+ change:{name:"Technical changes",clause:"14",form:"",fields:[["standard","Changed standard / requirement"],["impact","Technical, programme and cost impact"],["decision","Change-control decision / evidence reference"]]},
+ ecc:{name:"ECC preparation",clause:"16",form:"F0048",fields:[["section","Section 1 or 2"],["scope","Scope / baseline requirements"],["evidence","Evidence of compliance and related Section 1 forms"],["exceptions","Variations and exceptions"],["review","Review / endorsement / acceptance evidence references"]]},
+ ecmp:{name:"ECMP preparation",clause:"11.2",form:"",fields:[["scope","Project engineering and construction scope"],["roles","Roles and responsibilities"],["integration","Technical integration arrangements"],["arrangements","Project-specific processes"],["approval","Approval and endorsement evidence references"]]}
+};
+const STATUSES={draft:"Draft",open:"Open",in_review:"In review",closed:"Closed (record only)",withdrawn:"Withdrawn"};
+const fresh=()=>({reference:"",title:"",status:"draft",owner:"",due_date:"",details:{}});
+const placeholders=["project","project_reference","register","reference","title","status","owner","due_date","clause","form_reference","details","record_version","generated_date"];
+function values(project,record){
+  const cfg=KINDS[record.kind];
+  const out={project:project.name,project_reference:project.reference,register:cfg.name,reference:record.reference,title:record.title,status:STATUSES[record.status],owner:record.owner,due_date:record.due_date||"",clause:"NR/L2/RSE/02009 Issue 8 · "+cfg.clause,form_reference:cfg.form||"Not specified here",record_version:String(record.version),generated_date:new Date().toISOString().slice(0,10),details:cfg.fields.map(([k,l])=>l+":\n"+(record.details?.[k]||"[Not recorded]")).join("\n\n")};
+  for(const [k] of cfg.fields)out["field_"+k]=record.details?.[k]||"";
+  return out;
+}
+const defaultTemplate="Project: {{project}} ({{project_reference}})\nRecord: {{reference}} — {{title}}\nRegister: {{register}}\nStandard reference: {{clause}}\nRelated form: {{form_reference}}\nRecord status: {{status}}\nOwner: {{owner}}\nDue: {{due_date}}\n\n{{details}}\n\nRecord version: {{record_version}}\nGenerated: {{generated_date}}";
+const fill=(body,data)=>body.replace(/\{\{\s*([a-z_]+)\s*\}\}/g,(m,k)=>Object.hasOwn(data,k)?data[k]:m);
+const escape=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function download(name,body,type){
+  const url=URL.createObjectURL(new Blob([body],{type}));
+  Object.assign(document.createElement("a"),{href:url,download:name}).click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+function safeName(s){return String(s).replace(/[^a-z0-9._-]/gi,"_").slice(0,100)||"record";}
+function csvCell(v){let s=String(v??"");if(/^[\s]*[=+\-@]/.test(s)||/^[\t\r\n]/.test(s))s="'"+s;return '"'+s.replaceAll('"','""')+'"';}
+export default function AssuranceWorkspace({db,project,canEdit}){
+ const [kind,setKind]=useState("tq"),[rows,setRows]=useState([]),[templates,setTemplates]=useState([]);
+ const [draft,setDraft]=useState(null),[editing,setEditing]=useState(null),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true);
+ const [error,setError]=useState(""),[notice,setNotice]=useState(""),[search,setSearch]=useState(""),[status,setStatus]=useState("");
+ const [selected,setSelected]=useState(null),[templateId,setTemplateId]=useState(""),[templateName,setTemplateName]=useState(""),[templateBody,setTemplateBody]=useState(defaultTemplate),[showTemplate,setShowTemplate]=useState(false);
+ const live=useRef(true),lock=useRef(false);
+ const cfg=KINDS[kind];
+ useEffect(()=>{live.current=true;return()=>{live.current=false;};},[]);
+ async function refresh(){
+   setLoading(true);setError("");
+   try{
+     const [a,b]=await Promise.all([db.from("assurance_records").select("*").eq("project_id",project.id).order("created_at",{ascending:false}),db.from("assurance_templates").select("*").eq("project_id",project.id).order("name")]);
+     if(a.error)throw a.error;if(b.error)throw b.error;
+     if(live.current){setRows(a.data||[]);setTemplates(b.data||[]);}
+   }catch(e){if(live.current)setError(e.message);}
+   finally{if(live.current)setLoading(false);}
+ }
+ useEffect(()=>{refresh();},[project.id]);
+ function switchKind(k){setKind(k);setDraft(null);setEditing(null);setSelected(null);setTemplateId("");setShowTemplate(false);setSearch("");setStatus("");}
+ async function perform(fn){if(lock.current)return;lock.current=true;setBusy(true);setError("");setNotice("");try{await fn();}catch(e){if(live.current)setError(e.message);}finally{lock.current=false;if(live.current)setBusy(false);}}
+ function save(e){e.preventDefault();if(!canEdit||!draft)return;perform(async()=>{
+   const payload={...draft,reference:draft.reference.trim(),title:draft.title.trim(),owner:draft.owner.trim(),due_date:draft.due_date||null};
+   const res=editing?await db.from("assurance_records").update({...payload,version:editing.version+1}).eq("id",editing.id).eq("version",editing.version).select("id").maybeSingle():await db.from("assurance_records").insert({...payload,project_id:project.id,kind}).select("id").single();
+   if(res.error)throw res.error;if(!res.data)throw Error("Record changed or edit access revoked. Your changes were not saved. Refresh and reopen the record.");
+   setDraft(null);setEditing(null);setSelected(res.data.id);setNotice("Register record saved.");await refresh();
+ });}
+ function saveTemplate(e){e.preventDefault();if(!canEdit)return;perform(async()=>{
+   const res=await db.from("assurance_templates").insert({project_id:project.id,kind,name:templateName.trim(),body:templateBody}).select("id").single();
+   if(res.error)throw res.error;setTemplateId(res.data.id);setShowTemplate(false);setTemplateName("");setNotice("Reusable text template saved.");await refresh();
+ });}
+ const filtered=rows.filter(r=>r.kind===kind&&(!status||r.status===status)&&[r.reference,r.title,r.owner].some(v=>String(v||"").toLowerCase().includes(search.toLowerCase().trim())));
+ const record=rows.find(r=>r.id===selected&&r.kind===kind);
+ const text=record?fill(templates.find(t=>t.id===templateId&&t.kind===kind)?.body||defaultTemplate,values(project,record)):"";
+ function exportDraft(){
+   if(!record)return;
+   const html='<!doctype html><html lang="en"><meta charset="utf-8"><title>'+escape(record.reference)+' — SchemeWorks draft</title><style>body{font:15px system-ui;margin:40px;max-width:850px;color:#222}h1{font-size:25px}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;line-height:1.55}header,footer{border-bottom:1px solid #aaa;padding:12px 0}footer{border-top:1px solid #aaa;border-bottom:0;font-size:12px}@media print{body{margin:15mm}}</style><header><strong>SchemeWorks · WORKING DRAFT — NOT APPROVED</strong></header><h1>'+escape(record.title)+'</h1><pre>'+escape(text)+'</pre><footer>Not an official Network Rail form, signature, technical acceptance, formal instruction or compliance certificate. Verify against applicable controlled documents and project arrangements.</footer></html>';
+   download(safeName(record.reference)+"-draft.html",html,"text/html;charset=utf-8");
+ }
+ function exportRegister(){
+   const keys=["Reference","Title","Status","Owner","Due date","Record version",...cfg.fields.map(x=>x[1])];
+   const lines=[keys,...filtered.map(r=>[r.reference,r.title,STATUSES[r.status],r.owner,r.due_date,r.version,...cfg.fields.map(([k])=>r.details?.[k])])].map(row=>row.map(csvCell).join(",")).join("\r\n");
+   download(safeName(project.reference)+"-"+kind+"-register.csv","\ufeff"+lines,"text/csv;charset=utf-8");
+ }
+ return <section className="assuranceWorkspace">
+   <div className="swSectionHeader"><h2>Engineering assurance</h2><span className="note">NR/L2/RSE/02009 · Issue 8 reference baseline</span></div>
+   <p className="note">Project-wide working records. Confirm the applicable issue, contract and delivery group arrangements. Record status is not formal acceptance.</p>
+   {error&&<p className="error" role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
+   <div className="assuranceKinds">{Object.entries(KINDS).map(([k,c])=><button key={k} disabled={busy} className={k===kind?"active":""} onClick={()=>switchKind(k)}>{c.name} <small>{rows.filter(r=>r.kind===k).length}</small></button>)}</div>
+   <div className="swSectionHeader"><div><h2>{cfg.name}</h2><p className="note">Clause {cfg.clause}{cfg.form?" · "+cfg.form:""}</p></div><div className="chips"><button disabled={busy||loading} onClick={refresh}>Refresh</button><button disabled={loading} onClick={exportRegister}>Export CSV</button>{canEdit&&<button className="swPrimary" disabled={busy} onClick={()=>{setEditing(null);setDraft(fresh());}}>＋ New record</button>}</div></div>
+   <div className="swSearchRow"><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search reference, title or owner…" aria-label="Search register"/><select aria-label="Filter record status" value={status} onChange={e=>setStatus(e.target.value)}><option value="">All record statuses</option>{Object.entries(STATUSES).map(([k,l])=><option key={k} value={k}>{l}</option>)}</select></div>
+   {loading?<p>Loading registers…</p>:<div className="assuranceTableWrap"><table className="assuranceTable"><thead><tr>{["Reference","Title","Owner","Due","Status",""].map((h,i)=><th key={i}>{h}</th>)}</tr></thead><tbody>{filtered.map(r=><tr key={r.id} className={selected===r.id?"selected":""}><td>{r.reference}</td><td>{r.title}</td><td>{r.owner||"—"}</td><td>{r.due_date||"—"}</td><td>{STATUSES[r.status]}</td><td><button disabled={busy} onClick={()=>{setSelected(r.id);setDraft(null);setEditing(null);}}>View</button>{canEdit&&<button disabled={busy} onClick={()=>{setSelected(r.id);setEditing(r);setDraft({reference:r.reference,title:r.title,status:r.status,owner:r.owner,due_date:r.due_date||"",details:r.details||{}});}}>Edit</button>}</td></tr>)}</tbody></table>{!filtered.length&&<p className="swEmpty">No matching records.</p>}</div>}
+   {draft&&canEdit&&<form className="swFormPanel swForm" onSubmit={save}><div className="swSectionHeader"><h2>{editing?"Edit":"New"} record</h2><button type="button" disabled={busy} onClick={()=>{setDraft(null);setEditing(null);}}>Cancel</button></div><div className="swFormGrid">{[["reference","Reference",100],["title","Title",250],["owner","Owner / responsible person",200]].map(([k,l,max])=><label key={k}>{l}<input maxLength={max} required={k!=="owner"} value={draft[k]} onChange={e=>setDraft(d=>({...d,[k]:e.target.value}))}/></label>)}<label>Due date<input type="date" value={draft.due_date} onChange={e=>setDraft(d=>({...d,due_date:e.target.value}))}/></label><label>Record status<select value={draft.status} onChange={e=>setDraft(d=>({...d,status:e.target.value}))}>{Object.entries(STATUSES).map(([k,l])=><option key={k} value={k}>{l}</option>)}</select></label></div>{cfg.fields.map(([k,l])=><label key={k}>{l}<textarea rows={3} maxLength={8000} value={draft.details[k]||""} onChange={e=>setDraft(d=>({...d,details:{...d.details,[k]:e.target.value}}))}/></label>)}<button className="swPrimary" disabled={busy}>Save record</button></form>}
+   {record&&!draft&&<section className="swFormPanel assuranceDocument"><div className="swSectionHeader"><h2>Document preparation · {record.reference}</h2><button onClick={()=>setSelected(null)}>Close</button></div><label className="field">Template<select value={templateId} onChange={e=>setTemplateId(e.target.value)}><option value="">SchemeWorks working draft</option>{templates.filter(t=>t.kind===kind).map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label><pre>{text}</pre><button className="swPrimary" onClick={exportDraft}>Download populated draft (HTML)</button><p className="note">Open the file in a browser to print or save as PDF. No signature or approval is generated.</p></section>}
+   {canEdit&&<section className="swFormPanel"><div className="swSectionHeader"><h2>Reusable document templates</h2><button disabled={busy} onClick={()=>setShowTemplate(v=>!v)}>{showTemplate?"Close":"＋ New text template"}</button></div>{showTemplate&&<form className="swForm" onSubmit={saveTemplate}><label>Name<input required maxLength={200} value={templateName} onChange={e=>setTemplateName(e.target.value)}/></label><label>Template text<textarea required rows={12} maxLength={60000} value={templateBody} onChange={e=>setTemplateBody(e.target.value)}/></label><p className="note">Placeholders: {[...placeholders,...cfg.fields.map(([k])=>"field_"+k)].map(k=>"{{"+k+"}}").join(", ")}</p><button className="swPrimary" disabled={busy}>Save reusable template</button></form>}</section>}
+   <p className="note">TQ responses are not instructions; variation approval and engineering acceptance remain separate controlled processes. Use only authorised test records. Official form layouts and sign-off workflows are not implemented.</p>
+ </section>;
+}

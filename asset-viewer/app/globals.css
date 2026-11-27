@@ -316,3 +316,34 @@ button.folderTile { display:flex; align-items:center; gap:12px; min-width:0; tex
 .sharedDrawingBanner { font-size:12px; padding:7px 12px; }
 @media(prefers-color-scheme:light){ .swViewerToolbar button.swPrimary { color:#fff; } }
 @media(max-width:850px){ .swViewer { grid-template-columns:1fr; grid-template-rows:auto minmax(230px,1fr) minmax(0,auto); } .swViewer .side { max-height:45vh; } .swViewer.sidebarClosed { grid-template-rows:auto minmax(230px,1fr); } .viewerSaveGroup { border:0; padding-left:0; } }
+
+/* Interactive source-ink overlays — colour is a UI highlight, not asset status */
+.viewerDisplay { display:flex; align-items:center; gap:5px; color:var(--muted); }
+.viewerDisplay select { width:auto; font-size:12px; }
+.assetInkHit { position:absolute; z-index:3; padding:0; min-width:0; min-height:0; border:0; border-radius:0; background:transparent; cursor:pointer; overflow:visible; filter:drop-shadow(0 0 3px #168bff) drop-shadow(0 0 2px #168bff); }
+.assetInkHit:hover,.assetInkHit.selected { z-index:4; filter:drop-shadow(0 0 4px #00b5ff) drop-shadow(0 0 3px #00b5ff); outline:1px dashed #007dca; outline-offset:2px; }
+.assetInkHit:focus-visible { outline:2px solid #007dca; outline-offset:3px; }
+.assetInkGlow { position:absolute; inset:0; background:#0086ff; mask-size:100% 100%; -webkit-mask-size:100% 100%; mask-repeat:no-repeat; -webkit-mask-repeat:no-repeat; pointer-events:none; opacity:.85; }
+.assetInkHit.selected .assetInkGlow { background:#00a8eb; opacity:1; }
+.assetInkHit.emptyMask { border:1px dashed #007dca; background:#168bff15; }
+.assetRegionPreview { position:absolute; pointer-events:none; border:2px dashed #168bff; background:#168bff22; z-index:10; }
+/* Engineering assurance */
+.assuranceTabs { display:flex; gap:8px; border-bottom:1px solid var(--line); margin:0 0 20px; }
+.assuranceTabs button { border:0; border-radius:0; background:transparent; padding:10px 15px; border-bottom:2px solid transparent; }
+.assuranceTabs button.active { border-bottom-color:var(--accent); color:var(--accent); font-weight:650; }
+.assuranceWorkspace { display:flex; flex-direction:column; gap:14px; }
+.assuranceKinds { display:flex; gap:7px; flex-wrap:wrap; }
+.assuranceKinds button { font-size:12px; }
+.assuranceKinds button.active { color:var(--accent); border-color:var(--accent); background:rgba(111,149,255,.1); }
+.assuranceKinds small { color:var(--muted); margin-left:4px; }
+.assuranceWorkspace .swSearchRow { margin:0; }
+.assuranceWorkspace .swSearchRow select { width:auto; }
+.assuranceTableWrap { overflow:auto; border:1px solid var(--line); border-radius:8px; }
+.assuranceTable { border-collapse:collapse; width:100%; font-size:13px; text-align:left; }
+.assuranceTable th,.assuranceTable td { padding:11px; border-bottom:1px solid var(--line); vertical-align:top; overflow-wrap:anywhere; }
+.assuranceTable th { background:var(--panel); font-size:11px; color:var(--muted); white-space:nowrap; }
+.assuranceTable tr.selected { background:rgba(111,149,255,.1); }
+.assuranceTable td:last-child { white-space:nowrap; }
+.assuranceTable td button { margin:0 3px 3px 0; font-size:11px; }
+.assuranceDocument pre { white-space:pre-wrap; overflow-wrap:anywhere; font:13px/1.65 system-ui,sans-serif; padding:18px; background:var(--bg); border:1px solid var(--line); border-radius:6px; }
+.assuranceWorkspace .swFormPanel { margin:0; max-width:none; }
