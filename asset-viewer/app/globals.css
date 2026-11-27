@@ -228,7 +228,8 @@ h2 { font-size:14px; margin:0; }
 .workspaceBrand:has(.swMark) { display:inline-flex; align-items:center; gap:10px; font-size:21px; font-weight:750; letter-spacing:-.6px; }
 .swMark { width:31px; height:31px; display:grid; place-items:center; border-radius:8px; background:var(--accent); color:#101725; font-size:20px; font-weight:800; }
 .swBrandAccent { color:var(--accent); }
-.swLayout { display:grid; grid-template-columns:250px minmax(0,1fr); min-height:calc(100vh - 64px); max-width:1600px; margin:auto; }
+.swLayout { display:grid; grid-template-columns:250px minmax(0,1fr); min-height:calc(100vh - 62px); width:100%; margin:0; }
+.workspaceShell:has(> .swLayout) > .workspaceTopbar { padding-inline:20px; }
 .swNav { background:var(--panel); border-right:1px solid var(--line); padding:24px 16px; display:flex; flex-direction:column; gap:9px; min-width:0; }
 .swNavLabel { font-size:10px; font-weight:750; letter-spacing:1.3px; color:var(--muted); margin:16px 4px 5px; }
 .swNavLabel:first-child { margin-top:0; }
