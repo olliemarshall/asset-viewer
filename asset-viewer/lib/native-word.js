@@ -65,6 +65,9 @@ export async function populateWord(bytes,project,record){
  const body=children(doc.documentElement,"body")[0],tables=children(body,"tbl");
  const expected=record.kind==="tq"?2:4;
  if(tables.length!==expected)throw Error("Unexpected template table layout.");
+ const extraRows=record.kind==="tq"&&Array.isArray(record.details?.word_extra_options)?record.details.word_extra_options:[];
+ if(extraRows.length>10)throw Error("Too many solution rows for this template.");
+ const rowTemplate=extraRows.length?children(tables[0],"tr")[14].cloneNode(true):null;
  for(const [ti,ri,ci,value] of mappedCells(project,record)){
    const cell=children(children(tables[ti],"tr")[ri],"tc")[ci];
    if(!cell)throw Error("Unexpected mapped cell.");
@@ -74,6 +77,28 @@ export async function populateWord(bytes,project,record){
    const p=ps.find((p,i)=>i>0&&!p.textContent.trim()&&!p.getElementsByTagNameNS(NS,"drawing").length)||doc.createElementNS(NS,"w:p");
    if(!p.parentNode)cell.appendChild(p);
    appendText(doc,p,value);
+ }
+ // F0049 explicitly allows further solution rows. Insert after mapped cells
+ // so the original row indexes remain stable; remove cloned Word paragraph IDs.
+ if(rowTemplate){
+   const anchor=children(tables[0],"tr")[15];
+   const w14="http://schemas.microsoft.com/office/word/2010/wordml";
+   for(const [i,opt] of extraRows.entries()){
+     const row=rowTemplate.cloneNode(true);
+     for(const el of [row,...row.getElementsByTagName("*")]){
+       el.removeAttributeNS(w14,"paraId");el.removeAttributeNS(w14,"textId");
+     }
+     const cs=children(row,"tc");
+     if(cs.length!==3)throw Error("Unexpected solution row structure.");
+     const label=cs[0].getElementsByTagNameNS(NS,"t")[0];
+     if(!label)throw Error("Missing solution numbering.");
+     label.textContent=String(i+3)+".";
+     for(const [j,k] of ["solution","cost","programme"].entries()){
+       const value=str(opt?.[k]);
+       if(value){const p=doc.createElementNS(NS,"w:p");cs[j].appendChild(p);appendText(doc,p,value);}
+     }
+     tables[0].insertBefore(row,anchor);
+   }
  }
  // Draft marker appears inside the output, not just in the filename.
  const p=doc.createElementNS(NS,"w:p");
