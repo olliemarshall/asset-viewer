@@ -13,3 +13,8 @@ test("TQ response deadline is distinct from tracker due; missing dates flagged",
  r.details={response:"Reply recorded"};assert.equal(flags(r,today).missingSent,true);assert.equal(flags(r,today).missingResponseDate,true);
  assert.equal(validDay("2026-02-30"),false);
 });
+
+test("IDC notes are informational; deferred minutes remain outstanding",()=>{
+ const m=metrics([{kind:"idc",status:"note",due_date:"2026-11-26"},{kind:"idc",status:"deferred",due_date:"2026-11-26"},{kind:"idc",status:"closed"},{kind:"idc",status:"open"}],today);
+ assert.equal(m.note,1);assert.equal(m.deferred,1);assert.equal(m.outstanding,2);assert.equal(m.overdue,1);
+});
