@@ -11,7 +11,7 @@ export default function RecordWorkflow({db,project,record,canEdit}){
  useEffect(()=>{refresh();},[record.id,record.version]);
  const current=reviews.find(r=>r.record_version===record.version);
  const person=id=>{const t=team.find(t=>t.user_id===id);return t?t.display_name+" · "+t.designation:"Former / unlisted project engineer";};
- const eligible=team.filter(t=>t.active),reviewers=eligible.filter(t=>t.can_review&&t.user_id!==uid&&t.user_id!==record.updated_by);
+ const eligible=team.filter(t=>t.active&&t.designation!=="Project Management"),reviewers=eligible.filter(t=>t.can_review&&t.user_id!==uid&&t.user_id!==record.updated_by);
  const canDecide=canEdit&&!!current?.evidence_snapshot&&current?.status==="pending"&&current.reviewer_id===uid&&eligible.some(t=>t.user_id===uid&&t.can_review)&&current.requested_by!==uid&&record.updated_by!==uid;
  async function act(operation,target=null){
  if(lock.current||!canEdit)return;
