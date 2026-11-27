@@ -10,7 +10,7 @@ export async function loadProjectRecords(db,projectId){
  }
  return rows.sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at)));
 }
-export const outstanding=r=>!["closed","withdrawn"].includes(r.status);
+export const outstanding=r=>!["closed","withdrawn","note"].includes(r.status);
 export const active=r=>["open","in_review"].includes(r.status);
 export function localDay(date=new Date()){
  return [date.getFullYear(),String(date.getMonth()+1).padStart(2,"0"),String(date.getDate()).padStart(2,"0")].join("-");
@@ -27,9 +27,9 @@ export function flags(r,today){
  missingResponseDate:r.kind==="tq"&&!!String(r.details?.response||"").trim()&&!validDay(r.details?.word_reply_date)};
 }
 export function metrics(rows,today){
- const m={total:rows.length,draft:0,open:0,in_review:0,closed:0,withdrawn:0,outstanding:0,overdue:0,dueToday:0,unassigned:0,noDue:0,waiting:0,lateResponse:0,missingSent:0,missingResponseDate:0};
+ const m={total:rows.length,draft:0,open:0,in_review:0,closed:0,withdrawn:0,note:0,deferred:0,outstanding:0,overdue:0,dueToday:0,unassigned:0,noDue:0,waiting:0,lateResponse:0,missingSent:0,missingResponseDate:0};
  for(const r of rows){
-  if(["draft","open","in_review","closed","withdrawn"].includes(r.status))m[r.status]++;
+  if(["draft","open","in_review","closed","withdrawn","note","deferred"].includes(r.status))m[r.status]++;
   if(outstanding(r))m.outstanding++;
   for(const [k,v] of Object.entries(flags(r,today)))if(v)m[k]++;
  }
