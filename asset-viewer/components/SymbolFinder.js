@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { findSymbolMatches } from "../lib/symbol-match";
+import { loadPdfDocument } from "../lib/pdf-engine";
 
 // Category names refer to asset families; actual symbol images are selected
 // locally by an authorised user, not distributed with the application.
@@ -30,7 +31,7 @@ export default function SymbolFinder({targetCanvas,region,onClose,onMatches}){
   const [progress,setProgress]=useState(0),[error,setError]=useState("");
   const [whole,setWhole]=useState(false);
 
-  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;cancel.current?.abort();};},[]);
+  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;cancel.current?.abort();doc.current?.destroy().catch(()=>{});doc.current=null;};},[]);
   useEffect(()=>{const handler=e=>{if(e.key==="Escape"&&!busy){e.stopPropagation();onClose();}};window.addEventListener("keydown",handler);return()=>window.removeEventListener("keydown",handler);},[busy,onClose]);
   function copySource(){
     if(!targetCanvas||busy)return;
@@ -41,7 +42,8 @@ export default function SymbolFinder({targetCanvas,region,onClose,onMatches}){
 
   async function renderPage(pdf,n){
     const p=await pdf.getPage(n);
-    const v=p.getViewport({scale:3});
+    const original=p.getViewport({scale:1});
+    const v=p.getViewport({scale:Math.min(3,8192/Math.max(original.width,original.height),Math.sqrt(16000000/(original.width*original.height)))});
     if(!mounted.current||!canvas.current)return;
     const c=canvas.current;
     c.width=Math.ceil(v.width);c.height=Math.ceil(v.height);
@@ -51,12 +53,13 @@ export default function SymbolFinder({targetCanvas,region,onClose,onMatches}){
   async function openReference(e){
     const file=e.target.files[0];e.target.value="";
     if(!file||busy)return;
+    if(file.size>25*1024*1024){setError("Reference PDF must be 25 MiB or smaller.");return;}
     setBusy(true);setError("");
     try{
-      const pdfjs=await import("pdfjs-dist/build/pdf");
-      pdfjs.GlobalWorkerOptions.workerSrc="/pdf.worker.min.js";
-      const loaded=await pdfjs.getDocument({data:await file.arrayBuffer(),isEvalSupported:false}).promise;
-      doc.current=loaded;
+      const loaded=await loadPdfDocument(await file.arrayBuffer());
+      if(!mounted.current){await loaded.destroy();return;}
+      const previous=doc.current;doc.current=loaded;
+      await previous?.destroy();
       setPageCount(loaded.numPages);
       await renderPage(loaded,Math.min(15,loaded.numPages));
       setZoom(180);
