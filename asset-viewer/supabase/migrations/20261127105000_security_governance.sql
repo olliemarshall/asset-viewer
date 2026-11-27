@@ -69,13 +69,14 @@ begin
  if target_user=auth.uid() or exists(select 1 from public.organisation_members where organisation_id=oid and user_id=target_user and role='admin') then raise exception 'Organisation administrators cannot be revoked through project membership';end if;
  if access_level not in ('editor','viewer','revoked') or access_level is null then raise exception 'Invalid access level';end if;
  if not exists(select 1 from public.project_members where project_id=pid and user_id=target_user) then raise exception 'Project membership not found';end if;
+ if access_level='editor' and exists(select 1 from public.project_engineers where project_id=pid and user_id=target_user and designation='Project Management') then raise exception 'Change the designation to an engineering role before granting editor access';end if;
  if access_level='revoked' then
   delete from public.project_members where project_id=pid and user_id=target_user;
  else
   update public.project_members set role=access_level where project_id=pid and user_id=target_user;
  end if;
  if access_level<>'editor' then
-  update public.project_engineers set active=false,can_review=false where project_id=pid and user_id=target_user;
+  update public.project_engineers set active=case when access_level='viewer' and designation='Project Management' then active else false end,can_review=false where project_id=pid and user_id=target_user;
  end if;
 end;$$;
 revoke all on function workspace_private.set_project_member_access(uuid,uuid,text) from public,anon;
@@ -85,6 +86,43 @@ returns void language sql security invoker set search_path=''
 as $$select workspace_private.set_project_member_access(pid,target_user,access_level);$$;
 revoke all on function public.set_project_member_access(uuid,uuid,text) from public,anon;
 grant execute on function public.set_project_member_access(uuid,uuid,text) to authenticated;
+
+-- Project management is a read-only designation, not an engineering appointment.
+alter table public.project_engineers drop constraint project_engineers_designation_check;
+alter table public.project_engineers add constraint project_engineers_designation_check check(designation in ('CRE','CEM','Engineer','Project Management'));
+alter table public.project_engineers add constraint project_engineers_management_no_review check(designation<>'Project Management' or not can_review);
+create or replace function workspace_private.configure_project_engineer(pid uuid, account_email text, person_name text, job_role text, review_permission boolean, enabled boolean)
+returns uuid language plpgsql security definer set search_path=''
+as $
+declare oid uuid; uid uuid; member_role text;
+begin
+ select organisation_id into oid from public.projects where id=pid and status='active';
+ if auth.uid() is null or oid is null or not workspace_private.org_member(oid,true) then raise exception 'Project administrator required' using errcode='42501'; end if;
+ select id into uid from auth.users where lower(email)=lower(trim(account_email)) and email_confirmed_at is not null and deleted_at is null limit 1;
+ if uid is null then raise exception 'No confirmed registered account found'; end if;
+ if job_role not in ('CRE','CEM','Engineer','Project Management') or job_role is null then raise exception 'Invalid designation';end if;
+ if job_role='Project Management' and exists(select 1 from public.organisation_members where organisation_id=oid and user_id=uid and role='admin') then raise exception 'Organisation administrator cannot be configured as a read-only project manager';end if;
+ member_role:=case when job_role='Project Management' then 'viewer' else 'editor' end;
+ review_permission:=coalesce(review_permission,false) and job_role<>'Project Management' and enabled;
+ if enabled then
+ insert into public.organisation_members(organisation_id,user_id,role) values(oid,uid,'member') on conflict do nothing;
+ insert into public.project_members(project_id,user_id,role) values(pid,uid,member_role) on conflict(project_id,user_id) do update set role=excluded.role;
+ elsif job_role='Project Management' then
+ update public.project_members set role='viewer' where project_id=pid and user_id=uid;
+ end if;
+ insert into public.project_engineers(project_id,user_id,display_name,designation,can_review,active) values(pid,uid,trim(person_name),job_role,review_permission,enabled)
+ on conflict(project_id,user_id) do update set display_name=excluded.display_name,designation=excluded.designation,can_review=excluded.can_review,active=excluded.active;
+ return uid;
+end; $;
+
+create or replace function workspace_private.engineer_is_eligible(pid uuid, uid uuid, reviewer boolean)
+returns boolean language sql stable security definer set search_path=''
+as $ select auth.uid() is not null and exists(
+ select 1 from public.projects p join public.project_engineers e on e.project_id=p.id
+ join public.organisation_members om on om.organisation_id=p.organisation_id and om.user_id=e.user_id
+ where p.id=pid and p.status='active' and e.user_id=uid and e.active and e.designation<>'Project Management' and (not reviewer or e.can_review)
+ and (om.role='admin' or exists(select 1 from public.project_members pm where pm.project_id=pid and pm.user_id=uid and pm.role='editor'))
+); $;
 
 -- Restrict appointment files to organisation administrators for now.
 -- Appointment register metadata remains project-visible. No confidential
