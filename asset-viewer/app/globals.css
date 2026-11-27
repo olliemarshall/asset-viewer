@@ -347,3 +347,10 @@ button.folderTile { display:flex; align-items:center; gap:12px; min-width:0; tex
 .assuranceTable td button { margin:0 3px 3px 0; font-size:11px; }
 .assuranceDocument pre { white-space:pre-wrap; overflow-wrap:anywhere; font:13px/1.65 system-ui,sans-serif; padding:18px; background:var(--bg); border:1px solid var(--line); border-radius:6px; }
 .assuranceWorkspace .swFormPanel { margin:0; max-width:none; }
+
+.nativeFields { border:1px solid var(--line); border-radius:7px; padding:12px; }
+.nativeFields summary { cursor:pointer; font-weight:650; margin-bottom:10px; }
+.nativeWordLibrary { display:flex; flex-direction:column; gap:10px; }
+.nativeWordLibrary .swForm .nativePermission { display:flex; flex-direction:row; align-items:flex-start; gap:8px; }
+.nativePermission input { width:auto; flex-shrink:0; }
+.nativeWordLibrary > button.swPrimary { align-self:flex-start; }
