@@ -4,7 +4,7 @@ export const WORD_FORMS={
  rfi:{form:"F0052",issue:"1",fingerprint:"4799b9a2571a30d253b40131482c9d6e40954bd422abf52b5521c1512bb90ce0",size:128071}
 };
 export const WORD_FIELDS={
- tq:[["word_to","To"],["word_from","From"],["word_doc_ref","Document reference"],["word_doc_title","Document title"],["word_solution1","Option 1 — solution and technical compliance"],["word_cost1","Option 1 — estimated cost impact"],["word_programme1","Option 1 — estimated programme impact"],["word_solution2","Option 2 — solution and technical compliance"],["word_cost2","Option 2 — estimated cost impact"],["word_programme2","Option 2 — estimated programme impact"],["word_proposal","Proposed solution and rationale (draft)"],["word_proposal_cost","Estimated cost impact of proposal"],["word_proposal_programme","Estimated programme impact of proposal"],["word_scope_change","Change to scope? (recorded assessment)"]],
+ tq:[["word_to","To"],["word_from","From"],["word_doc_ref","Document reference"],["word_doc_title","Document title"],["word_solution1","Option 1 — solution and technical compliance"],["word_cost1","Option 1 — estimated cost impact"],["word_programme1","Option 1 — estimated programme impact"],["word_solution2","Option 2 — solution and technical compliance"],["word_cost2","Option 2 — estimated cost impact"],["word_programme2","Option 2 — estimated programme impact"],["word_proposal","Proposed solution and rationale (draft)"],["word_proposal_cost","Estimated cost impact of proposal"],["word_proposal_programme","Estimated programme impact of proposal"],["word_scope_change","Change to scope? (recorded assessment)"],["word_sent","Date sent (actual)"],["word_received","Date received by project (actual)"],["word_response_required","Response required by"],["word_milestone","Required milestone"],["word_delay_impact","Delay impact"],["word_contractor","Contractor"],["word_contractor_name","Contractor representative"],["word_reply_ref","Response reference"],["word_reply_date","Response received (actual)"],["word_pe","Discipline PE (recorded)"],["word_dpe","DPE (recorded)"],["word_pm","PM (recorded)"]],
  rfi:[["word_to","To (provider)"],["word_from","From (originator)"],["word_doc_ref","Document reference and version"],["word_discipline","Discipline or function"],["word_contact","Organisation / contractor / contact believed to hold information"]]
 };
 const NS="http://schemas.openxmlformats.org/wordprocessingml/2006/main";
@@ -39,7 +39,7 @@ export function mappedCells(project,record){
  [0,11,0,d.options&&"Option considerations (draft): "+d.options],
  [0,13,0,d.word_solution1],[0,13,1,d.word_cost1],[0,13,2,d.word_programme1],
  [0,14,0,d.word_solution2],[0,14,1,d.word_cost2],[0,14,2,d.word_programme2],
- [0,16,0,d.word_proposal],[0,17,0,d.word_proposal_programme],[0,17,1,d.word_proposal_cost],[0,19,0,d.word_scope_change]);
+ [0,16,0,d.word_proposal],[0,17,0,d.word_proposal_programme],[0,17,1,d.word_proposal_cost],[0,18,0,compact(d.word_response_required&&"Required by: "+d.word_response_required,d.word_milestone,d.word_delay_impact)],[0,19,0,d.word_scope_change],[0,20,0,d.word_contractor],[0,20,1,d.word_contractor_name]);
  }else if(record.kind==="rfi"){
  cells.push([0,8,0,d.word_doc_ref],[0,8,1,d.word_discipline],[0,9,0,compact(record.title,d.question)],[0,10,1,d.word_contact]);
  }else throw Error("No native mapping for this register.");
@@ -65,6 +65,9 @@ export async function populateWord(bytes,project,record){
  const body=children(doc.documentElement,"body")[0],tables=children(body,"tbl");
  const expected=record.kind==="tq"?2:4;
  if(tables.length!==expected)throw Error("Unexpected template table layout.");
+ const extraRows=record.kind==="tq"&&Array.isArray(record.details?.word_extra_options)?record.details.word_extra_options:[];
+ if(extraRows.length>10)throw Error("Too many solution rows for this template.");
+ const rowTemplate=extraRows.length?children(tables[0],"tr")[14].cloneNode(true):null;
  for(const [ti,ri,ci,value] of mappedCells(project,record)){
    const cell=children(children(tables[ti],"tr")[ri],"tc")[ci];
    if(!cell)throw Error("Unexpected mapped cell.");
@@ -74,6 +77,28 @@ export async function populateWord(bytes,project,record){
    const p=ps.find((p,i)=>i>0&&!p.textContent.trim()&&!p.getElementsByTagNameNS(NS,"drawing").length)||doc.createElementNS(NS,"w:p");
    if(!p.parentNode)cell.appendChild(p);
    appendText(doc,p,value);
+ }
+ // F0049 explicitly allows further solution rows. Insert after mapped cells
+ // so the original row indexes remain stable; remove cloned Word paragraph IDs.
+ if(rowTemplate){
+   const anchor=children(tables[0],"tr")[15];
+   const w14="http://schemas.microsoft.com/office/word/2010/wordml";
+   for(const [i,opt] of extraRows.entries()){
+     const row=rowTemplate.cloneNode(true);
+     for(const el of [row,...row.getElementsByTagName("*")]){
+       el.removeAttributeNS(w14,"paraId");el.removeAttributeNS(w14,"textId");
+     }
+     const cs=children(row,"tc");
+     if(cs.length!==3)throw Error("Unexpected solution row structure.");
+     const label=cs[0].getElementsByTagNameNS(NS,"t")[0];
+     if(!label)throw Error("Missing solution numbering.");
+     label.textContent=String(i+3)+".";
+     for(const [j,k] of ["solution","cost","programme"].entries()){
+       const value=str(opt?.[k]);
+       if(value){const p=doc.createElementNS(NS,"w:p");cs[j].appendChild(p);appendText(doc,p,value);}
+     }
+     tables[0].insertBefore(row,anchor);
+   }
  }
  // Draft marker appears inside the output, not just in the filename.
  const p=doc.createElementNS(NS,"w:p");

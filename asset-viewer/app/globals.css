@@ -228,7 +228,8 @@ h2 { font-size:14px; margin:0; }
 .workspaceBrand:has(.swMark) { display:inline-flex; align-items:center; gap:10px; font-size:21px; font-weight:750; letter-spacing:-.6px; }
 .swMark { width:31px; height:31px; display:grid; place-items:center; border-radius:8px; background:var(--accent); color:#101725; font-size:20px; font-weight:800; }
 .swBrandAccent { color:var(--accent); }
-.swLayout { display:grid; grid-template-columns:250px minmax(0,1fr); min-height:calc(100vh - 64px); max-width:1600px; margin:auto; }
+.swLayout { display:grid; grid-template-columns:250px minmax(0,1fr); min-height:calc(100vh - 62px); width:100%; margin:0; }
+.workspaceShell:has(> .swLayout) > .workspaceTopbar { padding-inline:20px; }
 .swNav { background:var(--panel); border-right:1px solid var(--line); padding:24px 16px; display:flex; flex-direction:column; gap:9px; min-width:0; }
 .swNavLabel { font-size:10px; font-weight:750; letter-spacing:1.3px; color:var(--muted); margin:16px 4px 5px; }
 .swNavLabel:first-child { margin-top:0; }
@@ -354,3 +355,53 @@ button.folderTile { display:flex; align-items:center; gap:12px; min-width:0; tex
 .nativeWordLibrary .swForm .nativePermission { display:flex; flex-direction:row; align-items:flex-start; gap:8px; }
 .nativePermission input { width:auto; flex-shrink:0; }
 .nativeWordLibrary > button.swPrimary { align-self:flex-start; }
+
+/* F0049-oriented form and engineering management */
+.tqForm { border:1px solid var(--line); border-radius:8px; padding:0 16px 16px; margin:0; min-width:0; display:flex; flex-direction:column; gap:12px; }
+.tqHeader { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:18px 0 12px; border-bottom:1px solid var(--line); }
+.tqHeader strong { font-size:22px; }
+.tqHeader p { margin:4px 0 0; color:var(--muted); font-size:12px; }
+.tqForm h3 { font-size:14px; background:rgba(111,149,255,.12); border-top:1px solid var(--line); border-bottom:1px solid var(--line); padding:12px 16px; margin:8px -16px 0; color:var(--text); }
+.tqGrid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.tqForm label { min-width:0; }
+.tqForm input[readonly] { opacity:.8; }
+.tqOptions { overflow:auto; }
+.tqOptions table { border-collapse:collapse; width:100%; table-layout:fixed; min-width:520px; }
+.tqOptions th,.tqOptions td { border:1px solid var(--line); padding:9px; text-align:left; vertical-align:top; font-size:12px; }
+.tqOptions th:first-child { width:48%; }
+.tqOptions th { background:rgba(111,149,255,.08); }
+.tqOptions textarea { resize:vertical; }
+.managementCards { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,155px),1fr)); gap:12px; }
+button.managementCard { display:flex; flex-direction:column; align-items:flex-start; gap:10px; padding:16px; text-align:left; min-height:94px; border:1px solid var(--line); border-radius:8px; background:var(--panel); }
+.managementCard span { color:var(--muted); font-size:12px; }
+.managementCard strong { font-size:27px; }
+.managementCard.active { border-color:var(--accent); background:rgba(111,149,255,.10); }
+.managementTable th:not(:first-child),.managementTable td:not(:first-child) { text-align:center; }
+.managementTable button { background:transparent; }
+.templateGrid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,400px),1fr)); gap:16px; align-items:start; }
+.templateCard { display:flex; flex-direction:column; gap:12px; min-width:0; padding:16px; border:1px solid var(--line); border-radius:10px; background:var(--panel); }
+.templateCard > h2 { margin:0; font-size:18px; }
+.templateCard .nativeWordLibrary { margin:0; padding:12px; }
+.assuranceTabs { flex-wrap:wrap; }
+@media(max-width:650px){.tqGrid{grid-template-columns:1fr;}.tqForm{padding-left:10px;padding-right:10px;}.tqForm h3{margin-left:-10px;margin-right:-10px;padding:10px;}}
+
+/* Quick IDC minutes and supporting documents */
+.idcMinutes { display:flex; flex-direction:column; gap:12px; padding:16px; border:1px solid var(--line); border-radius:10px; background:var(--panel); }
+.idcFilters { display:flex; flex-wrap:wrap; gap:12px; }
+.idcFilters .field { flex:1 1 200px; }
+.idcFieldset { display:flex; flex-direction:column; gap:12px; min-width:0; padding:0; margin:0; border:0; }
+.idcFieldset h3 { margin:6px 0; font-size:14px; }
+.idcQuick { display:grid; grid-template-columns: minmax(110px,1fr) minmax(200px,2.5fr) minmax(100px,1fr) minmax(100px,1fr) minmax(160px,2fr) minmax(90px,.8fr); gap:10px; align-items:start; }
+.idcQuick label { min-width:0; }
+.idcQuick input,.idcQuick textarea,.idcQuick select { width:100%; }
+.idcDue { max-width:220px; }
+.idcTable td { white-space:pre-wrap; min-width:90px; }
+.idcTable td:nth-child(3),.idcTable td:nth-child(6) { min-width:180px; }
+.idcTable td:last-child { min-width:50px; }
+.assuranceAttachments { display:flex; flex-direction:column; gap:12px; }
+.attachmentRow { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 0; border-bottom:1px solid var(--line); }
+.attachmentRow > div { min-width:0; overflow-wrap:anywhere; }
+.attachmentRow p { margin:5px 0 0; }
+.attachmentRow a { flex-shrink:0; }
+@media(max-width:1150px){.idcQuick{grid-template-columns:repeat(3,minmax(0,1fr));}}
+@media(max-width:650px){.idcQuick{grid-template-columns:1fr;}.idcMinutes{padding:10px;}}
