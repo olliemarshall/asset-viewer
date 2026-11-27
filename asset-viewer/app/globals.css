@@ -383,3 +383,24 @@ button.managementCard { display:flex; flex-direction:column; align-items:flex-st
 .templateCard .nativeWordLibrary { margin:0; padding:12px; }
 .assuranceTabs { flex-wrap:wrap; }
 @media(max-width:650px){.tqGrid{grid-template-columns:1fr;}.tqForm{padding-left:10px;padding-right:10px;}.tqForm h3{margin-left:-10px;margin-right:-10px;padding:10px;}}
+
+/* Quick IDC minutes and supporting documents */
+.idcMinutes { display:flex; flex-direction:column; gap:12px; padding:16px; border:1px solid var(--line); border-radius:10px; background:var(--panel); }
+.idcFilters { display:flex; flex-wrap:wrap; gap:12px; }
+.idcFilters .field { flex:1 1 200px; }
+.idcFieldset { display:flex; flex-direction:column; gap:12px; min-width:0; padding:0; margin:0; border:0; }
+.idcFieldset h3 { margin:6px 0; font-size:14px; }
+.idcQuick { display:grid; grid-template-columns: minmax(110px,1fr) minmax(200px,2.5fr) minmax(100px,1fr) minmax(100px,1fr) minmax(160px,2fr) minmax(90px,.8fr); gap:10px; align-items:start; }
+.idcQuick label { min-width:0; }
+.idcQuick input,.idcQuick textarea,.idcQuick select { width:100%; }
+.idcDue { max-width:220px; }
+.idcTable td { white-space:pre-wrap; min-width:90px; }
+.idcTable td:nth-child(3),.idcTable td:nth-child(6) { min-width:180px; }
+.idcTable td:last-child { min-width:50px; }
+.assuranceAttachments { display:flex; flex-direction:column; gap:12px; }
+.attachmentRow { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 0; border-bottom:1px solid var(--line); }
+.attachmentRow > div { min-width:0; overflow-wrap:anywhere; }
+.attachmentRow p { margin:5px 0 0; }
+.attachmentRow a { flex-shrink:0; }
+@media(max-width:1150px){.idcQuick{grid-template-columns:repeat(3,minmax(0,1fr));}}
+@media(max-width:650px){.idcQuick{grid-template-columns:1fr;}.idcMinutes{padding:10px;}}
